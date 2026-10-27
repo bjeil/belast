@@ -47,6 +47,17 @@ npm run build    # produksjonsbygg i dist/
 npm run preview  # forhåndsvisning av bygget
 ```
 
+## Hosting (GitHub Pages)
+
+Appen hostes automatisk på **GitHub Pages** ved hver push til `main`:
+
+- URL: `https://bjeil.github.io/belast/`
+- Workflow: `.github/workflows/deploy-pages.yml` (bygg + deploy)
+- CI kjører tester og bygg ved hver push/PR: `.github/workflows/ci.yml`
+
+Forutsetning: repoet må være **public** (gratis GitHub Pages). Ønsker du privat
+repo senere, bytt til Cloudflare Pages eller Netlify (støtter private repoer gratis).
+
 ## Bruk som app på telefonen
 
 Appen er en **PWA**: åpne den i Safari (iOS) eller Chrome (Android) og velg
