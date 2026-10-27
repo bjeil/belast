@@ -58,7 +58,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-display text-base tracking-wide text-viking-white">
-                TRENINGSDAGBOK
+                BELAST
               </h1>
               {playerName && (
                 <p className="text-xs text-viking-gold">{playerName}</p>

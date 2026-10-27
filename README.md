@@ -1,6 +1,6 @@
-# Viking Treningsdagbok 🛡️⚽
+# Belast 🛡️⚽
 
-En treningsdagbok for å loggføre treningshverdagen – laget i Viking FK-tema
+Loggfør treningshverdagen – laget i Viking FK-tema
 (mørk marineblå `#132436`, gull `#DBC067`, hvit, Viking-rød `#72121C` til varsler).
 
 ## Hva appen gjør

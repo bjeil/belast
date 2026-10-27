@@ -27,7 +27,7 @@ export function downloadJson(data: unknown, filename: string): void {
 
 export function exportBackup(profile: Profile, entries: DayEntry[]): void {
   const date = new Date().toISOString().slice(0, 10);
-  downloadJson(buildBackup(profile, entries), `viking-treningsdagbok-backup-${date}.json`);
+  downloadJson(buildBackup(profile, entries), `belast-backup-${date}.json`);
 }
 
 export function parseBackup(text: string): BackupFile {
@@ -98,7 +98,7 @@ export function exportCsv(entries: DayEntry[]): void {
   }
   const blob = new Blob(['﻿' + rows.join('\n')], { type: 'text/csv;charset=utf-8' });
   const date = new Date().toISOString().slice(0, 10);
-  triggerDownload(blob, `viking-treningsdagbok-${date}.csv`);
+  triggerDownload(blob, `belast-${date}.csv`);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

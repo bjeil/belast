@@ -28,7 +28,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
             <span className="font-display text-3xl text-viking-gold">V</span>
           </div>
           <h1 className="font-display text-2xl uppercase tracking-widest text-viking-white">
-            Treningsdagbok
+            Belast
           </h1>
           <p className="mt-2 text-sm text-viking-gold">Viking FK · Power &amp; Love</p>
         </div>

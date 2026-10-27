@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon.svg'],
       manifest: {
-        name: 'Viking Treningsdagbok',
-        short_name: 'Treningsdagbok',
+        name: 'Belast',
+        short_name: 'Belast',
         description: 'Loggfør trening, belastning og smerter – Viking FK-tema',
         theme_color: '#132436',
         background_color: '#132436',
