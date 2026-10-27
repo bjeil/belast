@@ -11,7 +11,7 @@ class TrainingDB extends Dexie {
   kv!: Table<KeyValueRow, string>;
 
   constructor() {
-    super('viking-treningsdagbok');
+    super('belast');
     this.version(1).stores({
       days: 'id, date, updatedAt',
       kv: 'key'

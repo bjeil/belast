@@ -6,12 +6,12 @@ import { sha256Hex } from './sha256';
  * Økt lagres i sessionStorage (ryddes når nettleserfanen lukkes).
  */
 
-export const AUTH_USER = 'viking';
+export const AUTH_USER = 'belast';
 
-// sha256("Viking1899")
-export const AUTH_PASS_HASH = 'f02412662c4ea691b66f25b45cc84a80f8b4f335eafb3a6c1b493eb382f47f27';
+// sha256("Belast2026")
+export const AUTH_PASS_HASH = '91346aa7a88f13032c90d6a4775d0448f7fbbb48accbf25b815d9c3f66572e23';
 
-const SESSION_KEY = 'viking-treningsdagbok:session';
+const SESSION_KEY = 'belast:session';
 
 export async function login(username: string, password: string): Promise<boolean> {
   const ok =

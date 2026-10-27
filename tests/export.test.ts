@@ -28,7 +28,7 @@ describe('backup roundtrip', () => {
     const profile = { playerName: 'Ola', birthYear: 2012, team: 'G13' };
     const backup = buildBackup(profile, entries);
     const parsed = parseBackup(JSON.stringify(backup));
-    expect(parsed.format).toBe('viking-treningsdagbok-backup');
+    expect(parsed.format).toBe('belast-backup');
     expect(parsed.profile).toEqual(profile);
     expect(parsed.entries).toEqual(entries);
   });

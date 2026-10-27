@@ -31,8 +31,8 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 
 ## Innlogging
 
-- Brukernavn: `viking`
-- Passord: `Viking1899`
+- Brukernavn: `belast`
+- Passord: `Belast2026`
 
 > Endre ved å generere ny hash: `printf 'NyttPassord' | sha256sum`, og sett den i
 > `src/lib/auth.ts` (konstant `AUTH_PASS_HASH`). Brukernavnet ligger i `AUTH_USER`.

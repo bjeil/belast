@@ -3,9 +3,9 @@ import { sha256Hex } from '../src/lib/sha256';
 
 describe('sha256', () => {
   it('hasher kjent verdi riktig', async () => {
-    // sha256("Viking1899") – samme verdi som er hardkodet i auth.ts
-    expect(await sha256Hex('Viking1899')).toBe(
-      'f02412662c4ea691b66f25b45cc84a80f8b4f335eafb3a6c1b493eb382f47f27'
+    // sha256("Belast2026") – samme verdi som er hardkodet i auth.ts
+    expect(await sha256Hex('Belast2026')).toBe(
+      '91346aa7a88f13032c90d6a4775d0448f7fbbb48accbf25b815d9c3f66572e23'
     );
   });
 

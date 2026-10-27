@@ -3,7 +3,7 @@ import { ACTIVITY_LABELS, BODY_PART_LABELS } from './types';
 import { formatDayLong } from './dates';
 
 export interface BackupFile {
-  format: 'viking-treningsdagbok-backup';
+  format: 'belast-backup';
   version: 1;
   exportedAt: string;
   profile: Profile;
@@ -12,7 +12,7 @@ export interface BackupFile {
 
 export function buildBackup(profile: Profile, entries: DayEntry[]): BackupFile {
   return {
-    format: 'viking-treningsdagbok-backup',
+    format: 'belast-backup',
     version: 1,
     exportedAt: new Date().toISOString(),
     profile,
@@ -32,7 +32,7 @@ export function exportBackup(profile: Profile, entries: DayEntry[]): void {
 
 export function parseBackup(text: string): BackupFile {
   const parsed = JSON.parse(text);
-  if (parsed?.format !== 'viking-treningsdagbok-backup' || parsed?.version !== 1) {
+  if (parsed?.format !== 'belast-backup' || parsed?.version !== 1) {
     throw new Error('Ugyldig backup-fil');
   }
   if (!Array.isArray(parsed.entries)) {
