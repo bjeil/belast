@@ -1,9 +1,3 @@
-import {
-  getAllCategoryRows,
-  getCategoryRow,
-  saveCategoryRow,
-  clearAllCategories
-} from './db';
 import type { Category, CategoryKind } from './types';
 import { REST_DAY, REST_DAY_LABEL } from './types';
 
@@ -26,6 +20,95 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { kind: 'body_part', key: 'fot', label: 'Fot', sortOrder: 60, active: true, updatedAt: '2025-01-01T00:00:00.000Z' },
   { kind: 'body_part', key: 'annet', label: 'Annet', sortOrder: 70, active: true, updatedAt: '2025-01-01T00:00:00.000Z' }
 ];
+
+/*
+ * Kategorier lagres i localStorage — IKKE i IndexedDB/Dexie.
+ * En Dexie schema-oppgradering blokkeres mens andre instanser (PWA på
+ * startskjermen, andre nettleserfaner) har databasen åpen, og da henger
+ * alle databasekall — hele appen står stille. Kategorier er få og små,
+ * så localStorage er tilstrekkelig (og de synkroniseres via Supabase).
+ */
+const STORAGE_KEY = 'belast:categories:v1';
+
+function readStore(): Category[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (c): c is Category =>
+        !!c &&
+        typeof c === 'object' &&
+        typeof (c as Category).kind === 'string' &&
+        typeof (c as Category).key === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStore(categories: Category[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(categories));
+  } catch {
+    // localStorage full eller privat modus — valgene fungerer for økten
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lavnivå lager-API (samme navn som tidligere Dexie-versjon)
+// ---------------------------------------------------------------------------
+
+/** Hent alle kategorier (inkl. inaktive) sortert etter sortOrder. */
+export async function getAllCategoryRows(): Promise<Category[]> {
+  return readStore().sort((a, b) => a.kind.localeCompare(b.kind) || a.sortOrder - b.sortOrder);
+}
+
+/** Hent én kategori på (kind, key). */
+export async function getCategoryRow(kind: string, key: string): Promise<Category | undefined> {
+  return readStore().find((c) => c.kind === kind && c.key === key);
+}
+
+/** Opprett eller oppdater kategori lokalt og merk den dirty for synk. */
+export async function saveCategoryRow(category: Category): Promise<void> {
+  const all = readStore();
+  const idx = all.findIndex((c) => c.kind === category.kind && c.key === category.key);
+  const row: Category = { ...category, dirty: true, updatedAt: new Date().toISOString() };
+  if (idx >= 0) all[idx] = row;
+  else all.push(row);
+  writeStore(all);
+}
+
+/** Hent alle dirty kategorier (ikke-synkede endringer). */
+export async function getDirtyCategories(): Promise<Category[]> {
+  return readStore().filter((c) => !!c.dirty);
+}
+
+/** Merk kategori som synkronisert (kalles etter vellykket push). */
+export async function markCategorySynced(
+  kind: string,
+  key: string,
+  patch: Partial<Category> = {}
+): Promise<void> {
+  const all = readStore();
+  const idx = all.findIndex((c) => c.kind === kind && c.key === key);
+  if (idx < 0) return;
+  all[idx] = { ...all[idx], ...patch, dirty: false };
+  writeStore(all);
+}
+
+/** Slett alle kategorier lokalt (ved «slett alle data»). */
+export async function clearAllCategories(): Promise<void> {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Høynivå-API
+// ---------------------------------------------------------------------------
 
 /** Alle kategorier (inkl. inaktive, for historikk-visning). */
 export async function getAllCategories(): Promise<Category[]> {
@@ -58,8 +141,11 @@ export function categoryLabel(
   return { label: `${pretty} (utgått)`, archived: true };
 }
 
-/** Etikett for én nøkkel, med fallback til standardkategorier. */
-export async function getCategoryLabel(kind: CategoryKind, key: string): Promise<{ label: string; archived: boolean }> {
+/** Etikett for én nøkkel, lest fra lokalt lager. */
+export async function getCategoryLabel(
+  kind: CategoryKind,
+  key: string
+): Promise<{ label: string; archived: boolean }> {
   return categoryLabel(await getAllCategoryRows(), kind, key);
 }
 
@@ -114,16 +200,6 @@ export async function activateCategory(kind: CategoryKind, key: string): Promise
   const existing = await getCategoryRow(kind, key);
   if (!existing) return;
   await saveCategoryRow({ ...existing, active: true });
-}
-
-/** Bytt rekkefølge på to kategorier (kontekst: liste i samme type). */
-export async function reorderCategories(kind: CategoryKind, keysInOrder: string[]): Promise<void> {
-  for (let i = 0; i < keysInOrder.length; i++) {
-    const existing = await getCategoryRow(kind, keysInOrder[i]);
-    if (existing && existing.sortOrder !== (i + 1) * 10) {
-      await saveCategoryRow({ ...existing, sortOrder: (i + 1) * 10 });
-    }
-  }
 }
 
 export async function clearCategories(): Promise<void> {

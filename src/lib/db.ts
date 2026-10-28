@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Category, DayEntry, AppSettings } from './types';
+import type { DayEntry, AppSettings } from './types';
 
 export interface KeyValueRow {
   key: string;
@@ -29,23 +29,48 @@ class TrainingDB extends Dexie {
   kv!: Table<KeyValueRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
   conflicts!: Table<ConflictRow, number>;
-  categories!: Table<Category, number>;
 
   constructor() {
     super('belast');
+    // NB: Kategorier ligger IKKE i Dexie — de lagres i localStorage
+    // (se lib/categories.ts). Unngå fremtidige schema-endringer her:
+    // en Dexie-oppgradering blokkeres mens andre instanser (PWA, faner)
+    // har databasen åpen, og da henger hele appen.
     this.version(2).stores({
       days: 'id, date, updatedAt',
       kv: 'key',
       syncMeta: 'date, syncedAt, dirty',
       conflicts: '++id, date, detectedAt'
     });
-    this.version(3).stores({
-      categories: '++id, kind, key, & [kind+key]'
-    });
   }
 }
 
 export const db = new TrainingDB();
+
+db.on('blocked', () => {
+  console.warn(
+    '[belast] IndexedDB-oppgradering blokkert av en annen instans — lukk andre faner/PWA og last siden på nytt.'
+  );
+});
+
+/**
+ * Åpne databasen ved oppstart. Hvis den lokale databasen har en NYERE versjon
+ * enn koden (f.eks. etter en nedgradering), nullstilles den — data hentes
+ * ned fra skyen igjen ved innlogging.
+ */
+export async function initDatabase(): Promise<void> {
+  try {
+    await db.open();
+  } catch (e) {
+    if (e instanceof Error && e.name === 'VersionError') {
+      console.warn('[belast] Lokal database hadde nyere versjon — nullstiller. Data hentes fra skyen.');
+      await db.delete();
+      await db.open();
+    } else {
+      throw e;
+    }
+  }
+}
 
 export async function getAllEntries(): Promise<DayEntry[]> {
   const rows = await db.days.toArray();
@@ -120,52 +145,4 @@ export async function getConflicts(): Promise<ConflictRow[]> {
 
 export async function clearConflicts(): Promise<void> {
   await db.conflicts.clear();
-}
-
-// ---------------------------------------------------------------------------
-// Kategorier (dimensjonstabell — også synkronisert til Supabase)
-// ---------------------------------------------------------------------------
-
-/** Hent alle kategorier (inkl. inaktive) sortert etter sortOrder. */
-export async function getAllCategoryRows(): Promise<Category[]> {
-  const rows = await db.categories.toArray();
-  return rows.sort((a, b) => a.kind.localeCompare(b.kind) || a.sortOrder - b.sortOrder);
-}
-
-/** Hent én kategori på (kind, key). */
-export async function getCategoryRow(kind: string, key: string): Promise<Category | undefined> {
-  return db.categories.where('[kind+key]').equals([kind, key]).first();
-}
-
-/** Opprett eller oppdater kategori lokalt og merk den dirty for synk. */
-export async function saveCategoryRow(category: Category): Promise<void> {
-  const existing = await getCategoryRow(category.kind, category.key);
-  const row: Category = {
-    ...category,
-    id: existing?.id,
-    dirty: true,
-    updatedAt: new Date().toISOString()
-  };
-  if (existing?.id !== undefined) {
-    await db.categories.put(row, existing.id);
-  } else {
-    await db.categories.add(row);
-  }
-}
-
-/** Hent alle dirty kategorier (ikke-synkede endringer). */
-export async function getDirtyCategories(): Promise<Category[]> {
-  return db.categories.filter((c) => !!c.dirty).toArray();
-}
-
-/** Merk kategori som synkronisert (kalles etter vellykket push). */
-export async function markCategorySynced(kind: string, key: string, patch: Partial<Category> = {}): Promise<void> {
-  const existing = await getCategoryRow(kind, key);
-  if (!existing || existing.id === undefined) return;
-  await db.categories.put({ ...existing, ...patch, dirty: false }, existing.id);
-}
-
-/** Slett alle kategorier lokalt (ved «slett alle data»). */
-export async function clearAllCategories(): Promise<void> {
-  await db.categories.clear();
 }

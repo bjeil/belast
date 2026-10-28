@@ -6,11 +6,14 @@ import {
   saveSettings,
   getConflicts,
   clearConflicts,
-  clearAllCategories,
-  saveCategoryRow,
   type ConflictRow
 } from '../lib/db';
-import { getAllCategories, seedDefaultCategories } from '../lib/categories';
+import {
+  getAllCategories,
+  seedDefaultCategories,
+  saveCategoryRow,
+  clearAllCategories
+} from '../lib/categories';
 import { exportBackup, exportCsv, parseBackup } from '../lib/export';
 import { syncManager, type SyncState } from '../lib/sync';
 import { saveEntry } from '../lib/db';
