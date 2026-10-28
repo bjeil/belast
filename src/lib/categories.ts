@@ -202,6 +202,36 @@ export async function activateCategory(kind: CategoryKind, key: string): Promise
   await saveCategoryRow({ ...existing, active: true });
 }
 
+/**
+ * Flytt en aktiv kategori én plass opp eller ned i rekkefølgen (blant de
+ * aktive kategoriene av samme type). sortOrder byttes mellom de to kategoriene,
+ * slik at kategorier med ulik steglengde og inaktive kategorier (som beholder
+ * plassen sin) ikke påvirkes. Returnerer alle kategorier av samme type, eller
+ * undefined hvis kategorien ikke finnes, er inaktiv eller allerede ligger
+ * øverst/nederst.
+ */
+export async function moveCategory(
+  kind: CategoryKind,
+  key: string,
+  direction: 'up' | 'down'
+): Promise<Category[] | undefined> {
+  const active = (await getAllCategoryRows())
+    .filter((c) => c.kind === kind && c.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
+  const idx = active.findIndex((c) => c.key === key);
+  if (idx < 0) return undefined;
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= active.length) return undefined;
+
+  const a = active[idx];
+  const b = active[swapIdx];
+  await saveCategoryRow({ ...a, sortOrder: b.sortOrder });
+  await saveCategoryRow({ ...b, sortOrder: a.sortOrder });
+  return (await getAllCategoryRows())
+    .filter((c) => c.kind === kind)
+    .sort((x, y) => x.sortOrder - y.sortOrder || x.key.localeCompare(y.key));
+}
+
 export async function clearCategories(): Promise<void> {
   await clearAllCategories();
 }

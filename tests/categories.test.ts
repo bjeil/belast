@@ -11,7 +11,8 @@ import {
   clearAllCategories,
   seedDefaultCategories,
   addCategory,
-  deactivateCategory
+  deactivateCategory,
+  moveCategory
 } from '../src/lib/categories';
 import type { Category } from '../src/lib/types';
 
@@ -122,5 +123,79 @@ describe('localStorage-lager for kategorier', () => {
     const cat = await getCategoryRow('body_part', 'skulder');
     expect(cat?.active).toBe(false);
     expect(categoryLabel(await getAllCategoryRows(), 'body_part', 'skulder').archived).toBe(true);
+  });
+});
+
+describe('moveCategory', () => {
+  beforeEach(async () => {
+    await clearAllCategories();
+    await saveCategoryRow({ kind: 'activity', key: 'a', label: 'A', sortOrder: 10, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+    await saveCategoryRow({ kind: 'activity', key: 'b', label: 'B', sortOrder: 20, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+    await saveCategoryRow({ kind: 'activity', key: 'c', label: 'C', sortOrder: 30, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+    await saveCategoryRow({ kind: 'body_part', key: 'kne', label: 'Kne', sortOrder: 10, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+  });
+
+  const order = async (kind: 'activity' | 'body_part') =>
+    (await getAllCategoryRows())
+      .filter((c) => c.kind === kind && c.active)
+      .sort((x, y) => x.sortOrder - y.sortOrder)
+      .map((c) => c.key);
+
+  it('flytter kategori ned og bytter sortOrder', async () => {
+    await moveCategory('activity', 'a', 'down');
+    expect(await order('activity')).toEqual(['b', 'a', 'c']);
+  });
+
+  it('flytter kategori opp og bytter sortOrder', async () => {
+    await moveCategory('activity', 'c', 'up');
+    expect(await order('activity')).toEqual(['a', 'c', 'b']);
+  });
+
+  it('returnerer undefined og endrer ingenting ved øverste/nederste plass', async () => {
+    expect(await moveCategory('activity', 'a', 'up')).toBeUndefined();
+    expect(await moveCategory('activity', 'c', 'down')).toBeUndefined();
+    expect(await order('activity')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('returnerer undefined for ukjent nøkkel', async () => {
+    expect(await moveCategory('activity', 'finnes_ikke', 'up')).toBeUndefined();
+  });
+
+  it('returnerer undefined for inaktiv kategori', async () => {
+    await deactivateCategory('activity', 'b');
+    expect(await moveCategory('activity', 'b', 'up')).toBeUndefined();
+    expect(await order('activity')).toEqual(['a', 'c']);
+  });
+
+  it('hopper over inaktive kategorier ved flytting', async () => {
+    await deactivateCategory('activity', 'b');
+    await moveCategory('activity', 'a', 'down');
+    expect(await order('activity')).toEqual(['c', 'a']);
+    // Inaktiv kategori beholder sin sortOrder og relative plass
+    const inactive = await getCategoryRow('activity', 'b');
+    expect(inactive?.sortOrder).toBe(20);
+    expect(inactive?.active).toBe(false);
+  });
+
+  it('endrer ikke kategorier av annen type', async () => {
+    await moveCategory('activity', 'a', 'down');
+    expect(await order('body_part')).toEqual(['kne']);
+  });
+
+  it('markerer flyttede kategorier som dirty for synk', async () => {
+    await markCategorySynced('activity', 'a');
+    await markCategorySynced('activity', 'b');
+    await moveCategory('activity', 'a', 'down');
+    const dirty = (await getDirtyCategories()).filter((c) => c.kind === 'activity').map((c) => c.key);
+    expect(dirty).toContain('a');
+    expect(dirty).toContain('b');
+  });
+
+  it('fungerer med ulik steglengde i sortOrder', async () => {
+    await saveCategoryRow({ kind: 'activity', key: 'd', label: 'D', sortOrder: 100, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+    await moveCategory('activity', 'c', 'down');
+    expect(await order('activity')).toEqual(['a', 'b', 'd', 'c']);
+    expect((await getCategoryRow('activity', 'c'))?.sortOrder).toBe(100);
+    expect((await getCategoryRow('activity', 'd'))?.sortOrder).toBe(30);
   });
 });
