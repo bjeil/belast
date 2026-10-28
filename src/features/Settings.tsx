@@ -354,6 +354,10 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
       {msg && (
         <p className="pb-2 text-center text-sm font-medium text-viking-gold">{msg}</p>
       )}
+
+      <p className="pb-2 text-center text-[10px] text-viking-white/30">
+        Belast · versjon {__BUILD_TIME__.slice(0, 10)}
+      </p>
     </div>
   );
 }

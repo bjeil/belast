@@ -154,6 +154,9 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
           <p className="text-center text-xs text-viking-white/45">
             Data lagres lokalt på enheten og synkroniseres til skyen.
           </p>
+          <p className="text-center text-[10px] text-viking-white/30">
+            Versjon {__BUILD_TIME__.slice(0, 10)}
+          </p>
         </form>
       </div>
     </div>

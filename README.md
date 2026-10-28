@@ -111,6 +111,26 @@ Appen er en **PWA**: åpne den i Safari (iOS) eller Chrome (Android) og velg
    (Excel, Numbers, Google Sheets)
 5. **"Eksporter alle data fra skyen (JSON)"** henter hele loggen fra Supabase
 
+## Feilsøking
+
+**"Feil brukernavn eller passord" selv om det er riktig?**
+Du kjører sannsynligvis en **gammel versjon** av appen (fra før sky-sync). Sjekk
+versjonsnummeret nederst på innloggingsskjermen eller i Innstillinger — det skal stå
+dagens dato. Slik får du den nye versjonen:
+
+- **Hvis appen er lagt til på startskjermen (PWA)**: avinstaller/ fjern ikonet,
+  åpne `https://bjeil.github.io/belast/` på nytt i nettleseren, logg inn, og legg
+  til på startskjermen på nytt.
+- **iPhone (Safari)**: lukk alle faner med appen, gå til Innstillinger → Safari →
+  "Tøm logg og nettsteddata" (eller bruk en privat fane for å teste først).
+- **Android (Chrome)**: lukk appen helt, gå til chrome://settings → Personvern →
+  "Tøm nettleserdata" → velg «Cachede bilder og filer», eller trykk lenge på
+  app-ikonet → «Appinfo» → «Lagring» → «Tøm hurtigbuffer».
+- **Laptop**: hard-refresh med `Ctrl+F5` (Windows) eller `Cmd+Shift+R` (Mac).
+
+**Synk-feil?** Sjekk synk-indikatoren i toppmenyen. Appen fungerer alltid offline —
+endringer lagres lokalt og synkroniseres når nettet er tilbake.
+
 ## Teknologi
 
 React 18 + TypeScript + Vite + Tailwind CSS, Dexie (IndexedDB), Recharts (grafer),
