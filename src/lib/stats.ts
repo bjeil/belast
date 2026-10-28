@@ -194,6 +194,40 @@ export function weeklyLoadSeries(
     .map(([weekStart, v]) => ({ weekStart, ...v }));
 }
 
+export interface WeeklyPoint {
+  weekStart: string;
+  load: number; // snitt belastning per dag i uka (0 på hvile/ikke registrert)
+  pain: number; // snitt smerte (sum nivå) per dag i uka
+  durationMin: number; // sum treningstid i minutter
+}
+
+/**
+ * Ukentlig trend for lange vindu (f.eks. 90 dager): belastning og smerte som
+ * snitt per dag, varighet som sum. Uker starter på mandag. Dager uten
+ * registrering teller som 0 (og trekker snittet ned), i likhet med dagsserien.
+ */
+export function weeklyTrendSeries(
+  entries: DayEntry[],
+  days: number,
+  now: Date = new Date()
+): WeeklyPoint[] {
+  const daily = dailyLoadSeries(entries, days, now);
+  const weeks = Math.ceil(days / 7);
+  const out: WeeklyPoint[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const slice = daily.slice(w * 7, w * 7 + 7);
+    if (slice.length === 0) break;
+    const monday = toISODate(addDays(parseDay(slice[0].date), -((parseDay(slice[0].date).getDay() + 6) % 7)));
+    out.push({
+      weekStart: monday,
+      load: slice.reduce((s, d) => s + d.load, 0) / slice.length,
+      pain: slice.reduce((s, d) => s + d.pain, 0) / slice.length,
+      durationMin: slice.reduce((s, d) => s + d.durationMin, 0)
+    });
+  }
+  return out;
+}
+
 /** Kalender-heatmap: alle dager i vinduet med belastning 0-10. */
 export function heatmapData(
   entries: DayEntry[],

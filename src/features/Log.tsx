@@ -169,14 +169,15 @@ export default function Log({ onSaved }: LogProps) {
     const base =
       'relative flex h-11 items-center justify-center rounded-xl text-sm transition-colors';
     const selected = iso === selectedDate ? 'ring-2 ring-app-gold' : '';
+    const painRing = !selected && e && e.pains.length > 0 ? 'ring-2 ring-app-pain-soft' : '';
     const today = isToday(iso) ? 'font-bold text-app-gold' : 'text-app-text/85';
     const future = isFuture(iso) ? 'opacity-40' : '';
-    if (!e) return `${base} ${selected} ${today} ${future} hover:bg-app-hover/10`;
+    if (!e) return `${base} ${selected} ${painRing} ${today} ${future} hover:bg-app-hover/10`;
     const rest =
       e.activities.length === 0 ||
       (e.activities.length === 1 && e.activities[0] === REST_DAY);
     const loadColor = rest ? loadColorClass(0) : loadColorClass(e.load);
-    return `${base} ${selected} ${loadColor}`;
+    return `${base} ${selected} ${painRing} ${loadColor}`;
   };
 
   return (

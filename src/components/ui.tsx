@@ -85,7 +85,7 @@ export function Slider({
       className={`h-2 w-full cursor-pointer appearance-none rounded-full ${
         variant === 'load'
           ? 'bg-gradient-to-r from-load-low via-app-gold/60 to-app-gold'
-          : 'bg-gradient-to-r from-slate-500 via-orange-400 to-app-pain-soft'
+          : 'bg-gradient-to-r from-slate-500 via-red-400 to-app-pain-soft'
       } slider-${variant}`}
     />
   );
