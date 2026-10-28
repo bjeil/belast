@@ -28,7 +28,9 @@ export default {
           hover: withAlpha('--app-hover'),
           gold: withAlpha('--app-gold'),
           'pain-soft': withAlpha('--app-pain-soft'),
-          'pain-light': withAlpha('--app-pain-light')
+          'pain-light': withAlpha('--app-pain-light'),
+          sleep: withAlpha('--app-sleep'),
+          nutrition: withAlpha('--app-nutrition')
         },
         load: {
           low: withAlpha('--load-low'),

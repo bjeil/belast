@@ -18,6 +18,8 @@
   --app-gold: 219 192 103;       /* viking-gold #DBC067 */
   --app-pain-soft: 224 90 102;   /* #E05A66 */
   --app-pain-light: 255 179 186; /* #ffb3ba (varseltekst) */
+  --app-sleep: 129 140 248;      /* indigo-400, søvn */
+  --app-nutrition: 52 211 153;   /* emerald-400, næring */
 
   /* Belastningsskala (kalender + heatmap) */
   --load-low: 52 100 140;        /* mørk blå, lav belastning 1-4 */
@@ -42,6 +44,8 @@
   --app-gold: 176 141 46;        /* mørkere gull for kontrast på lys bakgrunn */
   --app-pain-soft: 194 32 50;    /* mørkere rød for kontrast */
   --app-pain-light: 153 27 27;   /* rød-800 */
+  --app-sleep: 99 102 241;       /* indigo-500, søvn */
+  --app-nutrition: 5 150 105;    /* emerald-600, næring */
 
   --load-low: 96 165 250;        /* blue-400 */
   --load-mid: 14 165 233;        /* sky-500 */
@@ -129,6 +133,42 @@
     height: 18px;
     border-radius: 9999px;
     background: #E05A66;
+    border: 3px solid rgb(var(--app-bg));
+    cursor: pointer;
+  }
+  .slider-sleep::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    background: rgb(var(--app-sleep));
+    border: 3px solid rgb(var(--app-bg));
+    cursor: pointer;
+  }
+  .slider-sleep::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    background: rgb(var(--app-sleep));
+    border: 3px solid rgb(var(--app-bg));
+    cursor: pointer;
+  }
+  .slider-nutrition::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 9999px;
+    background: rgb(var(--app-nutrition));
+    border: 3px solid rgb(var(--app-bg));
+    cursor: pointer;
+  }
+  .slider-nutrition::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    background: rgb(var(--app-nutrition));
     border: 3px solid rgb(var(--app-bg));
     cursor: pointer;
   }

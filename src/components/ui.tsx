@@ -71,9 +71,17 @@ export function Slider({
   min?: number;
   max?: number;
   onChange: (v: number) => void;
-  variant?: 'load' | 'pain';
+  variant?: 'load' | 'pain' | 'sleep' | 'nutrition';
   ariaLabel: string;
 }) {
+  const trackClass =
+    variant === 'load'
+      ? 'bg-gradient-to-r from-load-low via-app-gold/60 to-app-gold'
+      : variant === 'pain'
+        ? 'bg-gradient-to-r from-slate-500 via-red-400 to-app-pain-soft'
+        : variant === 'sleep'
+          ? 'bg-gradient-to-r from-indigo-300 via-app-sleep/60 to-app-sleep'
+          : 'bg-gradient-to-r from-emerald-300 via-app-nutrition/60 to-app-nutrition';
   return (
     <input
       type="range"
@@ -82,11 +90,7 @@ export function Slider({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(Number(e.target.value))}
-      className={`h-2 w-full cursor-pointer appearance-none rounded-full ${
-        variant === 'load'
-          ? 'bg-gradient-to-r from-load-low via-app-gold/60 to-app-gold'
-          : 'bg-gradient-to-r from-slate-500 via-red-400 to-app-pain-soft'
-      } slider-${variant}`}
+      className={`h-2 w-full cursor-pointer appearance-none rounded-full ${trackClass} slider-${variant}`}
     />
   );
 }

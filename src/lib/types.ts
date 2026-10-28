@@ -37,6 +37,8 @@ export interface DayEntry {
   activities: ActivityType[];
   load: number; // 1-10, opplevd belastning (sRPE)
   durationMin?: number;
+  sleepScore?: number; // 1-10, søvnkvalitet (valgfritt)
+  nutritionScore?: number; // 1-10, næring/kosthold (valgfritt)
   pains: PainEntry[];
   note?: string;
   updatedAt: string; // ISO-tidsstempel

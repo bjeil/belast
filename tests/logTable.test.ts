@@ -40,7 +40,7 @@ describe('logTableRows', () => {
 
   it('fyller inn tid i timer, belastning og smerte for loggførte dager', () => {
     const entries = [
-      entry(iso(0), { load: 8, durationMin: 90, pains: [{ bodyPart: 'kne', level: 7 }] }),
+      entry(iso(0), { load: 8, durationMin: 90, pains: [{ bodyPart: 'kne', level: 7 }], sleepScore: 7, nutritionScore: 6 }),
       entry(iso(1), { load: 3, durationMin: 30, pains: [{ bodyPart: 'rygg', level: 2 }, { bodyPart: 'kne', level: 4 }] })
     ];
     const rows = logTableRows(entries, 30, NOW);
@@ -51,10 +51,14 @@ describe('logTableRows', () => {
       load: 8,
       pain: 7,
       hasPain: true,
+      sleepScore: 7,
+      nutritionScore: 6,
       logged: true
     });
     expect(rows[1].pain).toBe(6);
     expect(rows[1].durationHours).toBe(0.5);
+    expect(rows[1].sleepScore).toBeNull();
+    expect(rows[1].nutritionScore).toBeNull();
   });
 
   it('setter null for tid/belastning og 0 smerte for dager uten registrering', () => {
@@ -64,6 +68,8 @@ describe('logTableRows', () => {
     expect(r.load).toBeNull();
     expect(r.pain).toBe(0);
     expect(r.hasPain).toBe(false);
+    expect(r.sleepScore).toBeNull();
+    expect(r.nutritionScore).toBeNull();
     expect(r.logged).toBe(false);
   });
 

@@ -18,6 +18,8 @@ export interface WindowStats {
   highPainDays: number; // dager med smerte >= 6
   painByBodyPart: Record<BodyPart, { count: number; totalLevel: number; maxLevel: number }>;
   avgPainPerActiveDay: number;
+  avgSleepScore: number | null; // snitt søvnscore (null = ingen registrert)
+  avgNutritionScore: number | null; // snitt næringsscore (null = ingen registrert)
 }
 
 function emptyWindowStats(days: number): WindowStats {
@@ -35,7 +37,9 @@ function emptyWindowStats(days: number): WindowStats {
     daysWithPain: 0,
     highPainDays: 0,
     painByBodyPart: {},
-    avgPainPerActiveDay: 0
+    avgPainPerActiveDay: 0,
+    avgSleepScore: null,
+    avgNutritionScore: null
   };
 }
 
@@ -82,6 +86,15 @@ export function computeWindowStats(
   stats.avgLoad = stats.activeDays > 0 ? stats.totalLoad / stats.activeDays : 0;
   stats.avgPainPerDay = days > 0 ? stats.totalPain / days : 0;
   stats.avgPainPerActiveDay = stats.activeDays > 0 ? stats.totalPain / stats.activeDays : 0;
+
+  const sleepValues = inWindow.map((e) => e.sleepScore).filter((v): v is number => v != null);
+  const nutritionValues = inWindow.map((e) => e.nutritionScore).filter((v): v is number => v != null);
+  stats.avgSleepScore = sleepValues.length > 0
+    ? sleepValues.reduce((s, v) => s + v, 0) / sleepValues.length
+    : null;
+  stats.avgNutritionScore = nutritionValues.length > 0
+    ? nutritionValues.reduce((s, v) => s + v, 0) / nutritionValues.length
+    : null;
   return stats;
 }
 
@@ -140,6 +153,8 @@ export interface DailyPoint {
   load: number;
   pain: number;
   durationMin: number; // treningstid i minutter (0 på hvile/ikke registrert)
+  sleepScore: number; // 0 = ikke registrert
+  nutritionScore: number; // 0 = ikke registrert
 }
 
 /** Daglig serie for trendlinje: dato + belastning + smerte + varighet. */
@@ -158,7 +173,9 @@ export function dailyLoadSeries(
       date: iso,
       load: e && !isRestDay(e) ? e.load : 0,
       pain: e ? e.pains.reduce((s, p) => s + p.level, 0) : 0,
-      durationMin: e && !isRestDay(e) ? e.durationMin ?? 0 : 0
+      durationMin: e && !isRestDay(e) ? e.durationMin ?? 0 : 0,
+      sleepScore: e?.sleepScore ?? 0,
+      nutritionScore: e?.nutritionScore ?? 0
     });
   }
   return series;
@@ -199,6 +216,8 @@ export interface WeeklyPoint {
   load: number; // snitt belastning per dag i uka (0 på hvile/ikke registrert)
   pain: number; // snitt smerte (sum nivå) per dag i uka
   durationMin: number; // sum treningstid i minutter
+  sleepScore: number; // snitt søvnscore per dag i uka (0 = ikke registrert)
+  nutritionScore: number; // snitt næringsscore per dag i uka (0 = ikke registrert)
 }
 
 /**
@@ -222,7 +241,9 @@ export function weeklyTrendSeries(
       weekStart: monday,
       load: slice.reduce((s, d) => s + d.load, 0) / slice.length,
       pain: slice.reduce((s, d) => s + d.pain, 0) / slice.length,
-      durationMin: slice.reduce((s, d) => s + d.durationMin, 0)
+      durationMin: slice.reduce((s, d) => s + d.durationMin, 0),
+      sleepScore: slice.reduce((s, d) => s + d.sleepScore, 0) / slice.length,
+      nutritionScore: slice.reduce((s, d) => s + d.nutritionScore, 0) / slice.length
     });
   }
   return out;
@@ -305,6 +326,8 @@ export interface LogTableRow {
   load: number | null; // null = ikke loggført
   pain: number; // sum smertenivåer (0 = ingen smerte)
   hasPain: boolean;
+  sleepScore: number | null; // null = ikke registrert
+  nutritionScore: number | null; // null = ikke registrert
   logged: boolean; // false = dag uten registrering
 }
 
@@ -327,6 +350,8 @@ export function logTableRows(entries: DayEntry[], days = 30, now: Date = new Dat
       load: e ? e.load : null,
       pain,
       hasPain: !!e && e.pains.length > 0,
+      sleepScore: e?.sleepScore ?? null,
+      nutritionScore: e?.nutritionScore ?? null,
       logged: !!e
     });
   }

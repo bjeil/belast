@@ -66,6 +66,8 @@ export function exportCsv(entries: DayEntry[], categories: Category[] = []): voi
     'Aktiviteter',
     'Belastning (1-10)',
     'Varighet (min)',
+    'Søvn (1-10)',
+    'Næring (1-10)',
     'Smerte - kroppsdel',
     'Smerte - nivå (1-10)',
     'Smerte - kommentar',
@@ -78,6 +80,8 @@ export function exportCsv(entries: DayEntry[], categories: Category[] = []): voi
   for (const e of sorted) {
     const activities = e.activities.map((a) => activityLabel(categories, a)).join(', ');
     const weekday = formatDayLong(e.date).split(' ')[0];
+    const sleep = e.sleepScore != null ? String(e.sleepScore) : '';
+    const nutrition = e.nutritionScore != null ? String(e.nutritionScore) : '';
     if (e.pains.length === 0) {
       rows.push(
         [
@@ -86,6 +90,8 @@ export function exportCsv(entries: DayEntry[], categories: Category[] = []): voi
           activities,
           String(e.load),
           e.durationMin ? String(e.durationMin) : '',
+          sleep,
+          nutrition,
           '',
           '',
           '',
@@ -103,6 +109,8 @@ export function exportCsv(entries: DayEntry[], categories: Category[] = []): voi
             activities,
             String(e.load),
             e.durationMin ? String(e.durationMin) : '',
+            sleep,
+            nutrition,
             bodyPartLabel(categories, p.bodyPart),
             String(p.level),
             p.note ?? '',
