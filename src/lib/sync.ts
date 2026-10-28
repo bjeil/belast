@@ -15,7 +15,8 @@ import {
   getDirtyCategories,
   markCategorySynced,
   getCategoryRow,
-  saveCategoryRow
+  saveCategoryRow,
+  saveCategoryRowFromCloud
 } from './categories';
 import {
   getDirtyPlans,
@@ -24,7 +25,8 @@ import {
   markPlanSynced,
   markPlanTombstoneSynced,
   savePlan,
-  deletePlan
+  savePlanFromCloud,
+  removePlanLocally
 } from './plans';
 import {
   entryToRow,
@@ -320,14 +322,14 @@ class SyncManager {
       const cloudCat = rowToCategory(raw);
       const local = await getCategoryRow(raw.kind, raw.key);
       if (!local) {
-        await saveCategoryRow({ ...cloudCat, dirty: false });
+        await saveCategoryRowFromCloud(cloudCat);
         continue;
       }
       if (local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
         continue; // lokal endring vinner, pushes neste runde
       }
       if (new Date(raw.updated_at) >= new Date(local.updatedAt) && !sameCategoryContent(local, cloudCat)) {
-        await saveCategoryRow({ ...cloudCat, dirty: false });
+        await saveCategoryRowFromCloud(cloudCat);
       }
     }
   }
@@ -374,17 +376,17 @@ class SyncManager {
       const local = await getPlan(raw.id);
 
       if (raw.deleted) {
-        // Sletting i skyen → slett lokalt (med mindre lokal er dirty og nyere)
+        // Sletting i skyen → slett lokalt uten tombstone (med mindre lokal er dirty og nyere)
         if (local && local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
           continue; // lokal endring vinner, vil pushes tilbake
         }
-        if (local) await deletePlan(raw.id);
+        if (local) await removePlanLocally(raw.id);
         continue;
       }
 
       const cloudPlan = rowToPlan(raw);
       if (!local) {
-        await savePlan({ ...cloudPlan, dirty: false });
+        await savePlanFromCloud(cloudPlan);
         continue;
       }
       if (tombstoneIds.has(raw.id)) continue; // lokal sletting venter på push
@@ -392,7 +394,7 @@ class SyncManager {
         continue; // lokal endring vinner, pushes neste runde
       }
       if (new Date(raw.updated_at) >= new Date(local.updatedAt) && !samePlanContent(local, cloudPlan)) {
-        await savePlan({ ...cloudPlan, dirty: false });
+        await savePlanFromCloud(cloudPlan);
       }
     }
   }

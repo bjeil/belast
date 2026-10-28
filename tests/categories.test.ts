@@ -5,6 +5,7 @@ import {
   DEFAULT_CATEGORIES,
   getAllCategoryRows,
   saveCategoryRow,
+  saveCategoryRowFromCloud,
   getCategoryRow,
   getDirtyCategories,
   markCategorySynced,
@@ -123,6 +124,49 @@ describe('localStorage-lager for kategorier', () => {
     const cat = await getCategoryRow('body_part', 'skulder');
     expect(cat?.active).toBe(false);
     expect(categoryLabel(await getAllCategoryRows(), 'body_part', 'skulder').archived).toBe(true);
+  });
+});
+
+describe('saveCategoryRowFromCloud (synk — skal ikke merke dirty)', () => {
+  beforeEach(async () => {
+    await clearAllCategories();
+  });
+
+  it('lagrer kategori fra sky uten dirty-flagg (hindrer evig ping-pong)', async () => {
+    const cloudCat: Category = {
+      kind: 'activity',
+      key: 'test',
+      label: 'Test fra sky',
+      sortOrder: 10,
+      active: true,
+      updatedAt: '2025-06-10T20:00:00.000Z'
+    };
+    await saveCategoryRowFromCloud(cloudCat);
+    const local = await getCategoryRow('activity', 'test');
+    expect(local).toBeDefined();
+    expect(local!.dirty).toBe(false);
+    expect(local!.updatedAt).toBe('2025-06-10T20:00:00.000Z');
+    expect(await getDirtyCategories()).toHaveLength(0);
+  });
+
+  it('overskriver eksisterende lokal kategori uten å merke dirty', async () => {
+    await saveCategoryRow({ kind: 'activity', key: 'test', label: 'Lokal', sortOrder: 10, active: true, updatedAt: '2025-01-01T00:00:00.000Z' });
+    expect(await getDirtyCategories()).toHaveLength(1);
+
+    const cloudCat: Category = {
+      kind: 'activity',
+      key: 'test',
+      label: 'Fra sky',
+      sortOrder: 10,
+      active: true,
+      updatedAt: '2025-06-11T20:00:00.000Z'
+    };
+    await saveCategoryRowFromCloud(cloudCat);
+
+    const local = await getCategoryRow('activity', 'test');
+    expect(local!.label).toBe('Fra sky');
+    expect(local!.dirty).toBe(false);
+    expect(await getDirtyCategories()).toHaveLength(0);
   });
 });
 

@@ -79,6 +79,20 @@ export async function saveCategoryRow(category: Category): Promise<void> {
   writeStore(all);
 }
 
+/**
+ * Lagre en kategori fra skyen lokalt UTEN å merke den dirty.
+ * Brukes av pullCategories() — ellers overskrives dirty:false av
+ * saveCategoryRow() og syncen går i evig ping-pong.
+ */
+export async function saveCategoryRowFromCloud(category: Category): Promise<void> {
+  const all = readStore();
+  const idx = all.findIndex((c) => c.kind === category.kind && c.key === category.key);
+  const row: Category = { ...category, dirty: false };
+  if (idx >= 0) all[idx] = row;
+  else all.push(row);
+  writeStore(all);
+}
+
 /** Hent alle dirty kategorier (ikke-synkede endringer). */
 export async function getDirtyCategories(): Promise<Category[]> {
   return readStore().filter((c) => !!c.dirty);
