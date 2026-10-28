@@ -37,7 +37,14 @@ export default {
           mid: withAlpha('--load-mid'),
           high: withAlpha('--load-high')
         },
-        rest: withAlpha('--rest')
+        rest: withAlpha('--rest'),
+        score: {
+          cyan: withAlpha('--score-cyan'),
+          yellow: withAlpha('--score-yellow'),
+          orange: withAlpha('--score-orange'),
+          red: withAlpha('--score-red'),
+          green: withAlpha('--score-green')
+        }
       },
       fontFamily: {
         display: ['"Archivo Black"', 'Arial Black', 'sans-serif'],

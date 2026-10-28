@@ -106,8 +106,8 @@ export default function App() {
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'home', label: 'Hjem', icon: '🏠' },
-    { id: 'log', label: 'Loggfør', icon: '📝' },
     { id: 'plans', label: 'Plan', icon: '🗓️' },
+    { id: 'log', label: 'Loggfør', icon: '📝' },
     { id: 'stats', label: 'Statistikk', icon: '📊' },
     { id: 'settings', label: 'Innstillinger', icon: '⚙️' }
   ];

@@ -111,6 +111,28 @@ export function loadColorBgClass(v: number): string {
   return 'bg-load-low';
 }
 
+/** Fargeklasser for score-bokser i loggtabellen (1-10). */
+export type ScoreKind = 'load' | 'sleep' | 'nutrition' | 'pain';
+
+export function scoreBoxClass(kind: ScoreKind, v: number): string {
+  if (kind === 'load') {
+    if (v <= 3) return 'bg-score-cyan text-[#0c1826] dark:text-white';
+    if (v <= 6) return 'bg-score-yellow text-[#0c1826] dark:text-white';
+    if (v <= 8) return 'bg-score-orange text-white';
+    return 'bg-score-red text-white';
+  }
+  if (kind === 'sleep' || kind === 'nutrition') {
+    if (v <= 2) return 'bg-score-red text-white';
+    if (v <= 4) return 'bg-score-orange text-white';
+    if (v <= 7) return 'bg-score-yellow text-[#0c1826] dark:text-white';
+    return 'bg-score-green text-[#0c1826] dark:text-white';
+  }
+  // pain
+  if (v <= 3) return 'bg-score-yellow text-[#0c1826] dark:text-white';
+  if (v <= 6) return 'bg-score-orange text-white';
+  return 'bg-score-red text-white';
+}
+
 export { chartTheme };
 
 export function loadLabel(v: number): string {
