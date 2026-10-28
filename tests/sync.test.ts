@@ -59,6 +59,26 @@ describe('entryToRow / rowToEntry roundtrip', () => {
     const back = rowToEntry({ id: 'x', ...entryToRow(entry, USER_ID) });
     expect(back.pains).toEqual([]);
   });
+
+  it('roundtrip av søvn- og næringsscore', () => {
+    const entry = makeEntry({ sleepScore: 8, nutritionScore: 6 });
+    const row = entryToRow(entry, USER_ID);
+    expect(row.sleep_score).toBe(8);
+    expect(row.nutrition_score).toBe(6);
+    const back = rowToEntry({ id: 'x', ...row });
+    expect(back.sleepScore).toBe(8);
+    expect(back.nutritionScore).toBe(6);
+  });
+
+  it('håndterer manglende søvn- og næringsscore (null ↔ undefined)', () => {
+    const entry = makeEntry({ sleepScore: undefined, nutritionScore: undefined });
+    const row = entryToRow(entry, USER_ID);
+    expect(row.sleep_score).toBeNull();
+    expect(row.nutrition_score).toBeNull();
+    const back = rowToEntry({ id: 'x', ...row });
+    expect(back.sleepScore).toBeUndefined();
+    expect(back.nutritionScore).toBeUndefined();
+  });
 });
 
 describe('sameDayContent', () => {
@@ -84,6 +104,18 @@ describe('sameDayContent', () => {
 
   it('er false når note er forskjellig', () => {
     expect(sameDayContent(makeEntry(), makeEntry({ note: 'Annen kommentar' }))).toBe(false);
+  });
+
+  it('er false når søvnscore er forskjellig', () => {
+    expect(sameDayContent(makeEntry({ sleepScore: 8 }), makeEntry({ sleepScore: 5 }))).toBe(false);
+  });
+
+  it('er false når næringsscore er forskjellig', () => {
+    expect(sameDayContent(makeEntry({ nutritionScore: 8 }), makeEntry({ nutritionScore: undefined }))).toBe(false);
+  });
+
+  it('er true når begge mangler søvn/næring (undefined == null)', () => {
+    expect(sameDayContent(makeEntry({ sleepScore: undefined }), makeEntry({ sleepScore: undefined }))).toBe(true);
   });
 
   it('ignorerer updatedAt og id (ikke innhold)', () => {

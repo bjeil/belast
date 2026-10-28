@@ -29,6 +29,8 @@ export interface ChartTheme {
   gold: string;
   pain: string;
   loadMid: string;
+  sleep: string;
+  nutrition: string;
   text: string;
 }
 
@@ -44,6 +46,8 @@ export function chartTheme(): ChartTheme {
     gold: rgbTriplet('--app-gold', '219 192 103'),
     pain: rgbTriplet('--app-pain-soft', '224 90 102'),
     loadMid: rgbTriplet('--load-mid', '79 179 232'),
+    sleep: rgbTriplet('--app-sleep', '129 140 248'),
+    nutrition: rgbTriplet('--app-nutrition', '52 211 153'),
     text: rgbTriplet('--app-text', light ? '15 23 42' : '255 255 255')
   };
 }

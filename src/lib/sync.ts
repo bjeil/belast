@@ -229,6 +229,8 @@ class SyncManager {
           activities: [],
           load: 1,
           duration_min: null,
+          sleep_score: null,
+          nutrition_score: null,
           note: null,
           pains: [],
           updated_at: new Date().toISOString(),

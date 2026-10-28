@@ -35,6 +35,8 @@ const emptyDraft = (date: string): DayEntry => ({
   activities: [],
   load: 5,
   durationMin: undefined,
+  sleepScore: undefined,
+  nutritionScore: undefined,
   pains: [],
   note: '',
   updatedAt: new Date().toISOString()
@@ -349,6 +351,66 @@ export default function Log({ onSaved }: LogProps) {
               </div>
             </>
           )}
+
+          <div className="mb-5">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-app-text/60">
+                Søvn (valgfritt)
+              </p>
+              <span className="font-display text-lg text-app-sleep">
+                {draft.sleepScore ?? '–'}
+                {draft.sleepScore != null && (
+                  <span className="text-xs font-body text-app-text/60"> / 10</span>
+                )}
+              </span>
+            </div>
+            <Slider
+              value={draft.sleepScore ?? 5}
+              onChange={(v) => setDraft({ ...draft, sleepScore: v })}
+              variant="sleep"
+              ariaLabel="Søvnkvalitet"
+            />
+            <div className="mt-1 flex items-center justify-between text-[10px] text-app-text/40">
+              <span>1 · Dårlig</span>
+              <button
+                onClick={() => setDraft({ ...draft, sleepScore: undefined })}
+                className="text-app-text/50 underline hover:text-app-text/70"
+              >
+                Fjern
+              </button>
+              <span>10 · Utmerket</span>
+            </div>
+          </div>
+
+          <div className="mb-5">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-app-text/60">
+                Næring (valgfritt)
+              </p>
+              <span className="font-display text-lg text-app-nutrition">
+                {draft.nutritionScore ?? '–'}
+                {draft.nutritionScore != null && (
+                  <span className="text-xs font-body text-app-text/60"> / 10</span>
+                )}
+              </span>
+            </div>
+            <Slider
+              value={draft.nutritionScore ?? 5}
+              onChange={(v) => setDraft({ ...draft, nutritionScore: v })}
+              variant="nutrition"
+              ariaLabel="Næringskvalitet"
+            />
+            <div className="mt-1 flex items-center justify-between text-[10px] text-app-text/40">
+              <span>1 · Dårlig</span>
+              <button
+                onClick={() => setDraft({ ...draft, nutritionScore: undefined })}
+                className="text-app-text/50 underline hover:text-app-text/70"
+              >
+                Fjern
+              </button>
+              <span>10 · Utmerket</span>
+            </div>
+          </div>
 
           <div className="mb-5">
             <div className="mb-2 flex items-center justify-between">

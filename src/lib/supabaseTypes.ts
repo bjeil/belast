@@ -8,6 +8,8 @@ export interface DayEntryRow {
   activities: ActivityType[]; // tekstnøkler, f.eks. "kamp_akademi"
   load: number;
   duration_min: number | null;
+  sleep_score: number | null;
+  nutrition_score: number | null;
   note: string | null;
   pains: PainEntry[]; // jsonb
   updated_at: string; // ISO
@@ -34,6 +36,8 @@ export function entryToRow(entry: DayEntry, userId: string): Omit<DayEntryRow, '
     activities: entry.activities,
     load: entry.load,
     duration_min: entry.durationMin ?? null,
+    sleep_score: entry.sleepScore ?? null,
+    nutrition_score: entry.nutritionScore ?? null,
     note: entry.note ?? null,
     pains: entry.pains,
     updated_at: entry.updatedAt,
@@ -49,6 +53,8 @@ export function rowToEntry(row: DayEntryRow): DayEntry {
     activities: row.activities,
     load: row.load,
     durationMin: row.duration_min ?? undefined,
+    sleepScore: row.sleep_score ?? undefined,
+    nutritionScore: row.nutrition_score ?? undefined,
     pains: row.pains,
     note: row.note ?? undefined,
     updatedAt: row.updated_at
@@ -157,6 +163,8 @@ export function sameDayContent(a: DayEntry, b: DayEntry): boolean {
   return (
     a.load === b.load &&
     a.durationMin === b.durationMin &&
+    (a.sleepScore ?? null) === (b.sleepScore ?? null) &&
+    (a.nutritionScore ?? null) === (b.nutritionScore ?? null) &&
     a.note === b.note &&
     deepEqual(a.activities, b.activities) &&
     deepEqual(a.pains, b.pains)

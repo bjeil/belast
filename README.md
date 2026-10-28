@@ -13,6 +13,7 @@ Loggfør treningshverdagen – laget i Viking FK-tema
   beholdes i historikken (vises som «utgått»)
 - Opplevd treningsbelastning 1–10 (slider)
 - Varighet i minutter – med **hurtigtaster for 30/60/90 min** eller fri inntasting
+- **Søvnkvalitet 1–10** og **næringskvalitet 1–10** (valgfrie slidere, kan fjernes)
 - Skader/vondter: kroppsdel + smertenivå 1–10 + kommentar
 - Månedskalender med fargekoding – trykk på **hvilken som helst tidligere dag** for å
   etterregistrere eller rette
@@ -28,17 +29,19 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 
 **Statistikk**
 - Nøkkeltall for 7 / 30 / 90 dager / hele perioden: antall økter (per type),
-  total og snitt belastning, **total treningstid**, total smerte, dager med smerte
+  total og snitt belastning, **total treningstid**, total smerte, dager med smerte,
+  **snitt søvnscore** og **snitt næringsscore**
 - **ACWR** (akutt:kronisk belastningsforhold, 7 vs 28 dager) med grønn/gul/rød sone
-- Trendlinjer for belastning og smerte **samt treningstid (minutter)** per dag,
+- Trendlinjer for belastning, smerte, **søvn og næring** samt treningstid
+  (minutter) per dag – søvn og næring vises som stiplete linjer i samme diagram,
   søylediagram per uke
 - Kalender-heatmap over belastning (rød ring = smerte registrert)
 - Smerte per kroppsdel, scatter-plot belastning vs smerte
 - Registreringsstreak og belastningsendring vs forrige periode
 - Smertevarsel ved smerte ≥ 6 flere dager på rad
 - **Loggtabell**: knapp på statistikksiden viser en tabell over alle datoer de
-  siste 30 dagene – dato, ukedag (man–søn), treningstid (timer), belastning (score)
-  og smerte (score)
+  siste 30 dagene – dato, ukedag (man–søn), treningstid (timer), belastning (score),
+  **søvn (score)**, **næring (score)** og smerte (score)
 
 **Utseende**
 - Mørkt tema (Viking FK) eller **lyst tema** – byttes under Innstillinger → Utseende
@@ -84,6 +87,29 @@ Navnet vises i toppmenyen og på hjem-siden.
 
 > Anon-nøkkelen er offentlig ved design – all databeskyttelse skjer via
 > Row Level Security (RLS), slik at brukere kun ser egne data.
+
+## Migrasjon av eksisterende Supabase-database
+
+Har du allerede en database kjørende (opprettet før søvn/næring ble lagt til),
+må du legge til to nye kolonner i tabellen `day_entries`. Dette gjøres én gang:
+
+1. Gå til **Supabase Dashboard → SQL Editor**
+2. Kjør migrasjonsskriptet `supabase/migrations/001_add_sleep_nutrition.sql`
+   (innholdet under – idempotent, trygt å kjøre flere ganger):
+
+```sql
+alter table public.day_entries
+  add column if not exists sleep_score int check (sleep_score between 1 and 10);
+
+alter table public.day_entries
+  add column if not exists nutrition_score int check (nutrition_score between 1 and 10);
+```
+
+3. Verifiser i **Table Editor → day_entries** at kolonnene `sleep_score` og
+   `nutrition_score` nå finnes. Eksisterende rader får `NULL` (ikke registrert).
+
+> Nye installasjoner trenger ikke dette – `supabase/schema.sql` lager kolonnene
+> automatisk.
 
 ## Hvordan synkronisering fungerer
 

@@ -69,6 +69,8 @@ export default function Stats() {
         load: w.load,
         pain: w.pain,
         durationMin: w.durationMin,
+        sleepScore: w.sleepScore,
+        nutritionScore: w.nutritionScore,
         label: formatDayShort(w.weekStart)
       }));
     }
@@ -193,6 +195,18 @@ export default function Stats() {
           sub={stats.totalDurationMin > 0 ? `${stats.totalDurationMin} min totalt` : 'ikke ført'}
         />
         <StatCard
+          label="Søvn (snitt)"
+          value={stats.avgSleepScore === null ? '–' : stats.avgSleepScore.toFixed(1)}
+          sub={stats.avgSleepScore === null ? 'ikke ført' : 'av 10 · søvnkvalitet'}
+          accent={stats.avgSleepScore !== null && stats.avgSleepScore < 5 ? 'red' : stats.avgSleepScore !== null && stats.avgSleepScore < 7 ? 'white' : 'green'}
+        />
+        <StatCard
+          label="Næring (snitt)"
+          value={stats.avgNutritionScore === null ? '–' : stats.avgNutritionScore.toFixed(1)}
+          sub={stats.avgNutritionScore === null ? 'ikke ført' : 'av 10 · næringskvalitet'}
+          accent={stats.avgNutritionScore !== null && stats.avgNutritionScore < 5 ? 'red' : stats.avgNutritionScore !== null && stats.avgNutritionScore < 7 ? 'white' : 'green'}
+        />
+        <StatCard
           label="Total smerte"
           value={stats.totalPain}
           sub={`Snitt ${stats.avgPainPerDay.toFixed(1)} / dag`}
@@ -266,7 +280,7 @@ export default function Stats() {
 
       <Card>
         <CardTitle>
-          {useWeeklyTrend ? 'Belastning, smerte og tid – per uke' : 'Belastning, smerte og tid – trend'}
+          {useWeeklyTrend ? 'Belastning, smerte, søvn, næring og tid – per uke' : 'Belastning, smerte, søvn, næring og tid – trend'}
         </CardTitle>
         <div className="h-52 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -286,19 +300,21 @@ export default function Stats() {
                 formatter={(v: number, name: string) => {
                   if (name === 'Tid (min)') return [`${v} min`, name];
                   if (name === 'Belastning') return [`${v} / 10`, name];
-                  return [`${v}`, name];
+                  return [`${v} / 10`, name];
                 }}
               />
               <Bar yAxisId="right" dataKey="durationMin" fill={ct.loadMid} fillOpacity={0.35} name="Tid (min)" radius={[4, 4, 0, 0]} />
               <Line yAxisId="left" type="monotone" dataKey="load" stroke={ct.gold} strokeWidth={2} dot={false} name="Belastning" />
               <Line yAxisId="left" type="monotone" dataKey="pain" stroke={ct.pain} strokeWidth={2} dot={false} name="Smerte (sum)" />
+              <Line yAxisId="left" type="monotone" dataKey="sleepScore" stroke={ct.sleep} strokeWidth={2} strokeDasharray="5 3" dot={false} name="Søvn" />
+              <Line yAxisId="left" type="monotone" dataKey="nutritionScore" stroke={ct.nutrition} strokeWidth={2} strokeDasharray="2 2" dot={false} name="Næring" />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
         <p className="mt-1 text-[11px] text-app-text/50">
           {useWeeklyTrend
-            ? 'Per uke (mandag–søndag): venstre akse viser snitt belastning (gull) og smerte (rød) per dag, 0–10. Høyre akse: total treningstid i minutter (blå søyler).'
-            : 'Venstre akse: belastning (gull) og smerte (rød), 0–10. Høyre akse: treningstid i minutter (blå søyler).'}
+            ? 'Per uke (mandag–søndag): venstre akse viser snitt per dag 0–10: belastning (gull), smerte (rød), søvn (indigo, stiplet) og næring (grønn, prikket). Høyre akse: total treningstid i minutter (blå søyler).'
+            : 'Venstre akse 0–10: belastning (gull), smerte (rød), søvn (indigo, stiplet) og næring (grønn, prikket). Høyre akse: treningstid i minutter (blå søyler).'}
         </p>
       </Card>
 
@@ -431,6 +447,8 @@ function LogTable({ rows, onBack }: { rows: LogTableRow[]; onBack: () => void })
                 <th className="py-2 pr-3">Ukedag</th>
                 <th className="py-2 pr-3 text-right">Tid (t)</th>
                 <th className="py-2 pr-3 text-right">Belastning</th>
+                <th className="py-2 pr-3 text-right">Søvn</th>
+                <th className="py-2 pr-3 text-right">Næring</th>
                 <th className="py-2 text-right">Smerte</th>
               </tr>
             </thead>
@@ -455,6 +473,24 @@ function LogTable({ rows, onBack }: { rows: LogTableRow[]; onBack: () => void })
                         className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${loadColorClass(r.load)}`}
                       >
                         {r.load}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {r.sleepScore === null ? (
+                      '–'
+                    ) : (
+                      <span className="inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold text-app-sleep">
+                        {r.sleepScore}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {r.nutritionScore === null ? (
+                      '–'
+                    ) : (
+                      <span className="inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold text-app-nutrition">
+                        {r.nutritionScore}
                       </span>
                     )}
                   </td>

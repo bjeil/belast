@@ -11,6 +11,8 @@ create table if not exists public.day_entries (
   activities    text[] not null default '{}',
   load          int  not null check (load between 1 and 10),
   duration_min  int,
+  sleep_score   int check (sleep_score between 1 and 10),
+  nutrition_score int check (nutrition_score between 1 and 10),
   note          text,
   pains         jsonb not null default '[]',
   updated_at    timestamptz not null default now(),

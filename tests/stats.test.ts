@@ -100,6 +100,25 @@ describe('computeWindowStats', () => {
     expect(s.activeDays).toBe(0);
     expect(s.totalLoad).toBe(0);
     expect(s.avgLoad).toBe(0);
+    expect(s.avgSleepScore).toBeNull();
+    expect(s.avgNutritionScore).toBeNull();
+  });
+
+  it('beregner snitt søvn- og næringsscore over dager med verdi', () => {
+    const entries = [
+      entry(iso(0), { sleepScore: 8, nutritionScore: 6 }),
+      entry(iso(1), { sleepScore: 4, nutritionScore: undefined }),
+      entry(iso(2), { sleepScore: undefined, nutritionScore: undefined })
+    ];
+    const s = computeWindowStats(entries, 7, NOW);
+    expect(s.avgSleepScore).toBeCloseTo(6); // (8+4)/2
+    expect(s.avgNutritionScore).toBeCloseTo(6); // kun én verdi
+  });
+
+  it('avgSleepScore/avgNutritionScore er null når ingen har registrert', () => {
+    const s = computeWindowStats([entry(iso(0))], 7, NOW);
+    expect(s.avgSleepScore).toBeNull();
+    expect(s.avgNutritionScore).toBeNull();
   });
 });
 
@@ -171,6 +190,30 @@ describe('serier', () => {
     expect(series[6].durationMin).toBe(0); // ikke registrert
   });
 
+  it('dailyLoadSeries inkluderer søvn- og næringsscore per dag (0 = ikke registrert)', () => {
+    const entries = [
+      entry(iso(1), { sleepScore: 8, nutritionScore: 6 }),
+      entry(iso(2), { sleepScore: undefined, nutritionScore: undefined })
+    ];
+    const series = dailyLoadSeries(entries, 7, NOW);
+    expect(series[5].sleepScore).toBe(8);
+    expect(series[5].nutritionScore).toBe(6);
+    expect(series[4].sleepScore).toBe(0);
+    expect(series[4].nutritionScore).toBe(0);
+    expect(series[6].sleepScore).toBe(0); // ikke registrert dag
+    expect(series[6].nutritionScore).toBe(0);
+  });
+
+  it('dailyLoadSeries tar med søvn/næring også på hviledager', () => {
+    const entries = [
+      entry(iso(1), { activities: ['hviledag'], load: 1, sleepScore: 9, nutritionScore: 7 })
+    ];
+    const series = dailyLoadSeries(entries, 7, NOW);
+    expect(series[5].load).toBe(0); // hviledag
+    expect(series[5].sleepScore).toBe(9);
+    expect(series[5].nutritionScore).toBe(7);
+  });
+
   it('weeklyLoadSeries summerer per uke (inkl. varighet)', () => {
     const entries = [entry(iso(0), { load: 5, durationMin: 60 }), entry(iso(1), { load: 5, durationMin: 30 }), entry(iso(9), { load: 4 })];
     const weeks = weeklyLoadSeries(entries, 4, NOW);
@@ -222,6 +265,25 @@ describe('serier', () => {
     expect(weeks[1].load).toBeCloseTo(16 / 7);
     expect(weeks[1].pain).toBeCloseTo(0);
     expect(weeks[1].durationMin).toBe(135);
+  });
+
+  it('weeklyTrendSeries aggregerer søvn og næring per uke (snitt per dag)', () => {
+    const entries = [
+      entry('2025-06-02', { sleepScore: 8, nutritionScore: 6 }),
+      entry('2025-06-04', { sleepScore: 4, nutritionScore: 8 })
+    ];
+    const weeks = weeklyTrendSeries(entries, 7, NOW); // én uke: 09.06–15.06? nei – siste 7 dager
+    // Siste 7 dager fra 15.06 = 09.06–15.06, så 02.06/04.06 faller utenfor.
+    // Bruk 14 dager for å dekke begge ukene.
+    const weeks14 = weeklyTrendSeries(entries, 14, NOW);
+    expect(weeks14).toHaveLength(2);
+    // Uke 1 (02.06–08.06): søvn (8+0+4+0+0+0+0)/7 = 12/7, næring (6+0+8+0+0+0+0)/7 = 14/7
+    expect(weeks14[0].sleepScore).toBeCloseTo(12 / 7);
+    expect(weeks14[0].nutritionScore).toBeCloseTo(14 / 7);
+    // Uke 2 (09.06–15.06): ingen registreringer
+    expect(weeks14[1].sleepScore).toBeCloseTo(0);
+    expect(weeks14[1].nutritionScore).toBeCloseTo(0);
+    expect(weeks).toHaveLength(1); // kun én uke i 7-dagers vindu
   });
 
   it('weeklyTrendSeries runder 90 dager opp til 13 hele uker', () => {
