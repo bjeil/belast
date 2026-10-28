@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Category, DayEntry } from '../src/lib/types';
+import type { Category, DayEntry, WeekPlan } from '../src/lib/types';
 import { buildBackup, parseBackup } from '../src/lib/export';
 
 const categories: Category[] = [
@@ -27,14 +27,44 @@ const entries: DayEntry[] = [
   }
 ];
 
+const plans: WeekPlan[] = [
+  {
+    id: 'plan-1',
+    name: 'Uke 24',
+    favorite: true,
+    days: [
+      {
+        weekday: 0,
+        sessions: [{ activity: 'trening_akademi', load: 5, durationMin: 60, note: 'Lett teknikk' }]
+      }
+    ],
+    updatedAt: '2025-06-10T20:00:00.000Z'
+  }
+];
+
 describe('backup roundtrip', () => {
-  it('bygger og parser backup (v2) uten tap av data', () => {
-    const backup = buildBackup(entries, categories);
+  it('bygger og parser backup (v3) uten tap av data', () => {
+    const backup = buildBackup(entries, categories, plans);
     const parsed = parseBackup(JSON.stringify(backup));
     expect(parsed.format).toBe('belast-backup');
-    expect(parsed.version).toBe(2);
+    expect(parsed.version).toBe(3);
     expect(parsed.categories).toEqual(categories);
     expect(parsed.entries).toEqual(entries);
+    expect(parsed.plans).toEqual(plans);
+  });
+
+  it('aksepterer fortsatt gamle v2-backups (uten planer)', () => {
+    const v2 = {
+      format: 'belast-backup',
+      version: 2,
+      exportedAt: '2025-06-10T00:00:00.000Z',
+      categories,
+      entries
+    };
+    const parsed = parseBackup(JSON.stringify(v2));
+    expect(parsed.entries).toEqual(entries);
+    expect(parsed.categories).toEqual(categories);
+    expect(parsed.plans).toBeUndefined();
   });
 
   it('aksepterer fortsatt gamle v1-backups (uten kategorier)', () => {

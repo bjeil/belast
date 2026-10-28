@@ -77,6 +77,21 @@ begin
   end loop;
 end $$;
 
+-- 2b. Ukeplaner: én rad per plan per bruker (planlagt trening mandag–søndag).
+--     Slettede planer beholdes som tombstones (deleted = true) slik at
+--     sletting synkroniseres til andre enheter.
+create table if not exists public.week_plans (
+  id          uuid primary key,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  name        text not null default '',
+  favorite    boolean not null default false,
+  days        jsonb not null default '[]',
+  updated_at  timestamptz not null default now(),
+  deleted     boolean not null default false
+);
+
+create index if not exists week_plans_user_idx on public.week_plans (user_id);
+
 -- 3. Row Level Security: brukere kan KUN se og endre egne rader
 alter table public.day_entries enable row level security;
 
@@ -102,6 +117,29 @@ create policy "Brukere sletter egne rader"
 
 -- RLS for kategorier (samme mønster)
 alter table public.categories enable row level security;
+
+-- RLS for ukeplaner (samme mønster)
+alter table public.week_plans enable row level security;
+
+drop policy if exists "Brukere ser egne planer" on public.week_plans;
+create policy "Brukere ser egne planer"
+  on public.week_plans for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Brukere skriver egne planer" on public.week_plans;
+create policy "Brukere skriver egne planer"
+  on public.week_plans for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Brukere oppdaterer egne planer" on public.week_plans;
+create policy "Brukere oppdaterer egne planer"
+  on public.week_plans for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "Brukere sletter egne planer" on public.week_plans;
+create policy "Brukere sletter egne planer"
+  on public.week_plans for delete
+  using (auth.uid() = user_id);
 
 drop policy if exists "Brukere ser egne kategorier" on public.categories;
 create policy "Brukere ser egne kategorier"
@@ -140,6 +178,12 @@ begin
   ) then
     alter publication supabase_realtime add table public.categories;
   end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'week_plans'
+  ) then
+    alter publication supabase_realtime add table public.week_plans;
+  end if;
 end $$;
 
 -- 5. Hjelpefunksjon: slett ALLE data for innlogget bruker (GDPR art. 17)
@@ -150,6 +194,7 @@ security definer
 as $$
   delete from public.day_entries where user_id = auth.uid();
   delete from public.categories where user_id = auth.uid();
+  delete from public.week_plans where user_id = auth.uid();
 $$;
 
 -- ============================================================================

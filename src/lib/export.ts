@@ -1,22 +1,28 @@
-import type { Category, DayEntry } from './types';
+import type { Category, DayEntry, WeekPlan } from './types';
 import { categoryLabel } from './categories';
 import { formatDayLong } from './dates';
 
 export interface BackupFile {
   format: 'belast-backup';
-  version: 2;
+  version: 3;
   exportedAt: string;
   categories?: Category[]; // brukerens kategorier (etiketter)
   entries: DayEntry[];
+  plans?: WeekPlan[]; // brukerens ukeplaner (versjon 3)
 }
 
-export function buildBackup(entries: DayEntry[], categories: Category[] = []): BackupFile {
+export function buildBackup(
+  entries: DayEntry[],
+  categories: Category[] = [],
+  plans: WeekPlan[] = []
+): BackupFile {
   return {
     format: 'belast-backup',
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     categories,
-    entries
+    entries,
+    plans
   };
 }
 
@@ -25,14 +31,17 @@ export function downloadJson(data: unknown, filename: string): void {
   triggerDownload(blob, filename);
 }
 
-export function exportBackup(entries: DayEntry[], categories: Category[] = []): void {
+export function exportBackup(entries: DayEntry[], categories: Category[] = [], plans: WeekPlan[] = []): void {
   const date = new Date().toISOString().slice(0, 10);
-  downloadJson(buildBackup(entries, categories), `belast-backup-${date}.json`);
+  downloadJson(buildBackup(entries, categories, plans), `belast-backup-${date}.json`);
 }
 
 export function parseBackup(text: string): BackupFile {
   const parsed = JSON.parse(text);
-  if (parsed?.format !== 'belast-backup' || (parsed?.version !== 1 && parsed?.version !== 2)) {
+  if (
+    parsed?.format !== 'belast-backup' ||
+    (parsed?.version !== 1 && parsed?.version !== 2 && parsed?.version !== 3)
+  ) {
     throw new Error('Ugyldig backup-fil');
   }
   if (!Array.isArray(parsed.entries)) {

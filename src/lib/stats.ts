@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
 import { REST_DAY, type ActivityType, type BodyPart, type DayEntry } from './types';
-import { entriesInWindow, toISODate, windowDays, parseDay } from './dates';
+import { entriesInWindow, toISODate, windowDays, parseDay, weekdayIndex, WEEKDAY_LABELS_SHORT } from './dates';
 
 export interface WindowStats {
   days: number; // antall dager i vinduet
@@ -296,6 +296,41 @@ export function loadChangePercent(entries: DayEntry[], window: 7 | 30 | 90, now:
   const previous = sum(window, 2 * window - 1);
   if (previous === 0) return null;
   return ((current - previous) / previous) * 100;
+}
+
+export interface LogTableRow {
+  date: string; // yyyy-MM-dd
+  weekday: string; // man, tir, ons, tor, fre, lør, søn
+  durationHours: number | null; // null = ikke loggført (ikke treningstid 0)
+  load: number | null; // null = ikke loggført
+  pain: number; // sum smertenivåer (0 = ingen smerte)
+  hasPain: boolean;
+  logged: boolean; // false = dag uten registrering
+}
+
+/**
+ * Rader for loggtabellen: alle datoer de siste `days` dagene (inkl. i dag),
+ * nyeste først. Dager uten registrering tas med med null-verdier.
+ */
+export function logTableRows(entries: DayEntry[], days = 30, now: Date = new Date()): LogTableRow[] {
+  const byDate = new Map(entries.map((e) => [e.date, e]));
+  const today = startOfDay(now);
+  const rows: LogTableRow[] = [];
+  for (let i = 0; i < days; i++) {
+    const iso = toISODate(addDays(today, -i));
+    const e = byDate.get(iso);
+    const pain = e ? e.pains.reduce((s, p) => s + p.level, 0) : 0;
+    rows.push({
+      date: iso,
+      weekday: WEEKDAY_LABELS_SHORT[weekdayIndex(iso)],
+      durationHours: e && e.durationMin ? e.durationMin / 60 : null,
+      load: e ? e.load : null,
+      pain,
+      hasPain: !!e && e.pains.length > 0,
+      logged: !!e
+    });
+  }
+  return rows;
 }
 
 export { differenceInCalendarDays };

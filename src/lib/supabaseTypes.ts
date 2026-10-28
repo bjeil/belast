@@ -1,4 +1,4 @@
-import type { ActivityType, BodyPart, Category, DayEntry, PainEntry } from './types';
+import type { ActivityType, BodyPart, Category, DayEntry, PainEntry, WeekPlan } from './types';
 
 /** Supabase-rad slik den lagres i databasen (hybrid struktur). */
 export interface DayEntryRow {
@@ -53,6 +53,50 @@ export function rowToEntry(row: DayEntryRow): DayEntry {
     note: row.note ?? undefined,
     updatedAt: row.updated_at
   };
+}
+
+/** Supabase-rad for ukeplaner (tabellen `week_plans`). */
+export interface WeekPlanRow {
+  id: string; // uuid — samme som lokal plan-id
+  user_id: string;
+  name: string;
+  favorite: boolean;
+  days: WeekPlan['days']; // jsonb
+  updated_at: string; // ISO
+  deleted: boolean;
+}
+
+/** Konverterer lokal plan → database-rad. */
+export function planToRow(plan: WeekPlan, userId: string): WeekPlanRow {
+  return {
+    id: plan.id,
+    user_id: userId,
+    name: plan.name,
+    favorite: plan.favorite,
+    days: plan.days,
+    updated_at: plan.updatedAt,
+    deleted: false
+  };
+}
+
+/** Konverterer database-rad → lokal plan. */
+export function rowToPlan(row: WeekPlanRow): WeekPlan {
+  return {
+    id: row.id,
+    name: row.name,
+    favorite: row.favorite,
+    days: row.days,
+    updatedAt: row.updated_at
+  };
+}
+
+/** Sammenligner to planversjoner (innhold, ikke tidsstempel). */
+export function samePlanContent(a: WeekPlan, b: WeekPlan): boolean {
+  return (
+    a.name === b.name &&
+    a.favorite === b.favorite &&
+    JSON.stringify(a.days) === JSON.stringify(b.days)
+  );
 }
 
 /** Konverterer lokal kategori → database-rad (uten id, settes ved upsert). */

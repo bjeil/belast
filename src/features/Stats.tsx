@@ -27,11 +27,13 @@ import {
   weeklyTrendSeries,
   heatmapData,
   loadVsPain,
-  loadChangePercent
+  loadChangePercent,
+  logTableRows,
+  type LogTableRow
 } from '../lib/stats';
-import { formatDayShort, WEEKDAY_LABELS, parseDay, weekStartISO } from '../lib/dates';
+import { formatDayShort, formatDayLong, WEEKDAY_LABELS, parseDay, weekStartISO } from '../lib/dates';
 import { chartTheme, chartTooltipStyle } from '../lib/theme';
-import { Card, CardTitle, StatCard, EmptyState, loadColorBgClass } from '../components/ui';
+import { Card, CardTitle, StatCard, EmptyState, loadColorBgClass, loadColorClass } from '../components/ui';
 
 const WINDOWS: { id: StatsWindow; label: string }[] = [
   { id: 7, label: '7 d' },
@@ -44,6 +46,7 @@ export default function Stats() {
   const [entries, setEntries] = useState<DayEntry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [window, setWindow] = useState<StatsWindow>(30);
+  const [showTable, setShowTable] = useState(false);
   const ct = useMemo(() => chartTheme(), []);
 
   useEffect(() => {
@@ -126,6 +129,8 @@ export default function Stats() {
     [trend]
   );
 
+  const tableRows = useMemo(() => logTableRows(entries, 30), [entries]);
+
   const zoneTextColor =
     zone === 'danger'
       ? 'text-app-pain-soft'
@@ -135,16 +140,28 @@ export default function Stats() {
           ? 'text-emerald-500 dark:text-emerald-400'
           : 'text-app-text/60';
 
+  if (showTable) {
+    return <LogTable rows={tableRows} onBack={() => setShowTable(false)} />;
+  }
+
   if (entries.length === 0) {
     return (
-      <EmptyState>
-        Ingen data ennå. Registrer dager under <strong>Loggfør</strong>, så dukker statistikken opp her.
-      </EmptyState>
+      <div className="space-y-4">
+        <button onClick={() => setShowTable(true)} className="btn-ghost w-full">
+          📋 Loggtabell (siste 30 dager)
+        </button>
+        <EmptyState>
+          Ingen data ennå. Registrer dager under <strong>Loggfør</strong>, så dukker statistikken opp her.
+        </EmptyState>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <button onClick={() => setShowTable(true)} className="btn-ghost w-full">
+        📋 Loggtabell (siste 30 dager)
+      </button>
       <div className="flex gap-2">
         {WINDOWS.map((w) => (
           <button
@@ -394,6 +411,69 @@ export default function Stats() {
           </p>
         </Card>
       )}
+    </div>
+  );
+}
+
+function LogTable({ rows, onBack }: { rows: LogTableRow[]; onBack: () => void }) {
+  return (
+    <div className="space-y-4">
+      <button onClick={onBack} className="btn-ghost w-full">
+        ← Tilbake til statistikk
+      </button>
+      <Card>
+        <CardTitle>Treningslogg – siste 30 dager</CardTitle>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-app-border/15 text-left text-[11px] font-semibold uppercase tracking-wider text-app-text/50">
+                <th className="py-2 pr-3">Dato</th>
+                <th className="py-2 pr-3">Ukedag</th>
+                <th className="py-2 pr-3 text-right">Tid (t)</th>
+                <th className="py-2 pr-3 text-right">Belastning</th>
+                <th className="py-2 text-right">Smerte</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr
+                  key={r.date}
+                  className={`border-b border-app-border/10 ${r.logged ? '' : 'text-app-text/40'}`}
+                >
+                  <td className="py-2 pr-3" title={formatDayLong(r.date)}>
+                    {formatDayShort(r.date)}
+                  </td>
+                  <td className="py-2 pr-3">{r.weekday}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {r.durationHours === null ? '–' : r.durationHours.toFixed(1)}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">
+                    {r.load === null ? (
+                      '–'
+                    ) : (
+                      <span
+                        className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${loadColorClass(r.load)}`}
+                      >
+                        {r.load}
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    className={`py-2 text-right tabular-nums ${
+                      r.hasPain ? 'font-semibold text-app-pain-soft' : ''
+                    }`}
+                  >
+                    {r.pain > 0 ? r.pain : '–'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-[11px] text-app-text/50">
+          «–» = ikke loggført eller ingen registrert verdi. Smerte = sum av smertenivåer den dagen.
+        </p>
+      </Card>
     </div>
   );
 }
