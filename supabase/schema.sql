@@ -123,9 +123,24 @@ create policy "Brukere sletter egne kategorier"
   on public.categories for delete
   using (auth.uid() = user_id);
 
--- 4. Realtime: appen får beskjed når data endres på en annen enhet
-alter publication supabase_realtime add table public.day_entries;
-alter publication supabase_realtime add table public.categories;
+-- 4. Realtime: appen får beskjed når data endres på en annen enhet.
+--    (Idempotent: sjekker først om tabellen allerede er med i publikasjonen,
+--    ellers feiler `alter publication` ved gjentatt kjøring.)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'day_entries'
+  ) then
+    alter publication supabase_realtime add table public.day_entries;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'categories'
+  ) then
+    alter publication supabase_realtime add table public.categories;
+  end if;
+end $$;
 
 -- 5. Hjelpefunksjon: slett ALLE data for innlogget bruker (GDPR art. 17)
 create or replace function public.delete_all_my_data()
