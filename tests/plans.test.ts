@@ -10,6 +10,8 @@ import {
   markPlanSynced,
   markPlanTombstoneSynced,
   savePlan,
+  savePlanFromCloud,
+  removePlanLocally,
   clearAllPlans,
   summarizePlan,
   planDayLabel
@@ -81,6 +83,49 @@ describe('lagring og henting', () => {
     await markPlanSynced('plan-1');
     expect(await getDirtyPlans()).toHaveLength(0);
     expect((await getPlan('plan-1'))?.dirty).toBe(false);
+  });
+});
+
+describe('savePlanFromCloud (synk — skal ikke merke dirty)', () => {
+  it('lagrer plan fra sky uten dirty-flagg (hindrer evig ping-pong)', async () => {
+    const cloudPlan = makePlan({ updatedAt: '2025-06-10T20:00:00.000Z' });
+    await savePlanFromCloud(cloudPlan);
+    const local = await getPlan('plan-1');
+    expect(local).toBeDefined();
+    expect(local!.dirty).toBe(false);
+    expect(local!.updatedAt).toBe('2025-06-10T20:00:00.000Z');
+    expect(await getDirtyPlans()).toHaveLength(0);
+  });
+
+  it('overskriver eksisterende lokal plan uten å merke dirty', async () => {
+    await savePlan(makePlan({ name: 'Lokal endring' }));
+    expect(await getDirtyPlans()).toHaveLength(1);
+
+    const cloudPlan = makePlan({ name: 'Fra sky', updatedAt: '2025-06-11T20:00:00.000Z' });
+    await savePlanFromCloud(cloudPlan);
+
+    const local = await getPlan('plan-1');
+    expect(local!.name).toBe('Fra sky');
+    expect(local!.dirty).toBe(false);
+    expect(await getDirtyPlans()).toHaveLength(0);
+  });
+});
+
+describe('removePlanLocally (sletting fra sky)', () => {
+  it('sletter plan uten å lage tombstone', async () => {
+    await savePlan(makePlan());
+    await removePlanLocally('plan-1');
+    expect(await getAllPlans()).toHaveLength(0);
+    expect(await getPlanTombstones()).toHaveLength(0);
+  });
+
+  it('sletter bare angitt plan', async () => {
+    await savePlan(makePlan({ id: 'a' }));
+    await savePlan(makePlan({ id: 'b' }));
+    await removePlanLocally('a');
+    const remaining = await getAllPlans();
+    expect(remaining.map((p) => p.id)).toEqual(['b']);
+    expect(await getPlanTombstones()).toHaveLength(0);
   });
 });
 

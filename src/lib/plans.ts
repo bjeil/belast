@@ -108,6 +108,25 @@ export async function savePlan(plan: WeekPlan): Promise<void> {
   writeStore(all);
 }
 
+/**
+ * Lagre en plan fra skyen lokalt UTEN å merke den dirty.
+ * Brukes av pullPlans() — ellers overskrives dirty:false av savePlan()
+ * og syncen går i evig ping-pong.
+ */
+export async function savePlanFromCloud(plan: WeekPlan): Promise<void> {
+  const all = readStore();
+  const idx = all.findIndex((p) => p.id === plan.id);
+  const row: WeekPlan = { ...plan, dirty: false };
+  if (idx >= 0) all[idx] = row;
+  else all.push(row);
+  writeStore(all);
+}
+
+/** Slett en plan lokalt UTEN å lage tombstone (brukes når sletting kommer fra skyen). */
+export async function removePlanLocally(id: string): Promise<void> {
+  writeStore(readStore().filter((p) => p.id !== id));
+}
+
 /** Slett plan lokalt og registrer tombstone slik at sletting synkroniseres. */
 export async function deletePlan(id: string): Promise<void> {
   writeStore(readStore().filter((p) => p.id !== id));
