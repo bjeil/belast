@@ -27,8 +27,8 @@ export default {
           border: withAlpha('--app-border'),
           hover: withAlpha('--app-hover'),
           gold: withAlpha('--app-gold'),
-          'pain-soft': 'var(--app-pain-soft)',
-          'pain-light': 'var(--app-pain-light)'
+          'pain-soft': withAlpha('--app-pain-soft'),
+          'pain-light': withAlpha('--app-pain-light')
         },
         load: {
           low: withAlpha('--load-low'),

@@ -24,11 +24,12 @@ import {
   ACWR_ZONE_LABELS,
   dailyLoadSeries,
   weeklyLoadSeries,
+  weeklyTrendSeries,
   heatmapData,
   loadVsPain,
   loadChangePercent
 } from '../lib/stats';
-import { formatDayShort, WEEKDAY_LABELS, parseDay, toISODate, windowDays } from '../lib/dates';
+import { formatDayShort, WEEKDAY_LABELS, parseDay, weekStartISO } from '../lib/dates';
 import { chartTheme, chartTooltipStyle } from '../lib/theme';
 import { Card, CardTitle, StatCard, EmptyState, loadColorBgClass } from '../components/ui';
 
@@ -56,14 +57,23 @@ export default function Stats() {
   const change = useMemo(() => loadChangePercent(entries, window === 'all' ? 30 : window), [entries, window]);
 
   const trendDays = window === 'all' ? 90 : window;
-  const trend = useMemo(
-    () =>
-      dailyLoadSeries(entries, trendDays).map((d) => ({
-        ...d,
-        label: formatDayShort(d.date)
-      })),
-    [entries, trendDays]
-  );
+  const useWeeklyTrend = window === 90;
+  const trend = useMemo(() => {
+    if (useWeeklyTrend) {
+      // Lange vindu: aggreger per uke (snitt belastning/smerte, sum tid)
+      return weeklyTrendSeries(entries, trendDays).map((w) => ({
+        date: w.weekStart,
+        load: w.load,
+        pain: w.pain,
+        durationMin: w.durationMin,
+        label: formatDayShort(w.weekStart)
+      }));
+    }
+    return dailyLoadSeries(entries, trendDays).map((d) => ({
+      ...d,
+      label: formatDayShort(d.date)
+    }));
+  }, [entries, trendDays, useWeeklyTrend]);
 
   const weekly = useMemo(() => {
     const weeks = window === 'all' ? 12 : Math.ceil(trendDays / 7);
@@ -98,16 +108,16 @@ export default function Stats() {
   const scatter = useMemo(() => loadVsPain(entries, trendDays), [entries, trendDays]);
 
   const heatWeeks = useMemo(() => {
+    // Uker starter på mandag (norsk standard): dow 0 = mandag ... 6 = søndag
     const cells = heat.map((h) => ({ ...h, dow: (parseDay(h.date).getDay() + 6) % 7 }));
-    const weeksMap = new Map<number, typeof cells>();
+    const weeksMap = new Map<string, typeof cells>();
     for (const c of cells) {
-      const monday = toISODate(parseDay(c.date).getDay() === 0 ? parseDay(c.date) : new Date(parseDay(c.date).getTime() - ((parseDay(c.date).getDay() + 6) % 7) * 86400000));
-      const key = parseDay(monday).getTime();
+      const key = weekStartISO(c.date);
       if (!weeksMap.has(key)) weeksMap.set(key, []);
       weeksMap.get(key)!.push(c);
     }
     return Array.from(weeksMap.entries())
-      .sort((a, b) => a[0] - b[0])
+      .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([, days]) => days);
   }, [heat]);
 
@@ -238,7 +248,9 @@ export default function Stats() {
       </Card>
 
       <Card>
-        <CardTitle>Belastning, smerte og tid – trend</CardTitle>
+        <CardTitle>
+          {useWeeklyTrend ? 'Belastning, smerte og tid – per uke' : 'Belastning, smerte og tid – trend'}
+        </CardTitle>
         <div className="h-52 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
@@ -267,7 +279,9 @@ export default function Stats() {
           </ResponsiveContainer>
         </div>
         <p className="mt-1 text-[11px] text-app-text/50">
-          Venstre akse: belastning (gull) og smerte (rød), 0–10. Høyre akse: treningstid i minutter (blå søyler).
+          {useWeeklyTrend
+            ? 'Per uke (mandag–søndag): venstre akse viser snitt belastning (gull) og smerte (rød) per dag, 0–10. Høyre akse: total treningstid i minutter (blå søyler).'
+            : 'Venstre akse: belastning (gull) og smerte (rød), 0–10. Høyre akse: treningstid i minutter (blå søyler).'}
         </p>
       </Card>
 

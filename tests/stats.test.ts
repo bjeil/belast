@@ -6,12 +6,13 @@ import {
   acwrZone,
   dailyLoadSeries,
   weeklyLoadSeries,
+  weeklyTrendSeries,
   heatmapData,
   loadVsPain,
   consecutiveHighPainDays,
   loadChangePercent
 } from '../src/lib/stats';
-import { currentStreak, longestStreak, windowDays, entriesInWindow, toISODate } from '../src/lib/dates';
+import { currentStreak, longestStreak, windowDays, entriesInWindow, toISODate, weekStartISO } from '../src/lib/dates';
 import { addDays, startOfDay } from 'date-fns';
 
 const NOW = new Date('2025-06-15T12:00:00');
@@ -195,6 +196,57 @@ describe('serier', () => {
     const data = loadVsPain(entries, 7, NOW);
     expect(data).toHaveLength(1);
     expect(data[0]).toMatchObject({ load: 6, pain: 4 });
+  });
+
+  it('weeklyTrendSeries aggregerer per uke: snitt belastning/smerte, sum varighet', () => {
+    // NOW = 2025-06-15 (søndag). Siste 14 dager: 2025-06-02 (man) … 2025-06-15 (søn)
+    // Uke 1: 02.06–08.06, uke 2: 09.06–15.06
+    const entries = [
+      entry('2025-06-02', { load: 8, durationMin: 60, pains: [{ bodyPart: 'kne', level: 4 }] }),
+      entry('2025-06-04', { load: 4, durationMin: 30, pains: [{ bodyPart: 'kne', level: 2 }] }),
+      entry('2025-06-09', { load: 6, durationMin: 90 }),
+      entry('2025-06-15', { load: 10, durationMin: 45 }) // i dag, søndag i uke 2
+    ];
+    const weeks = weeklyTrendSeries(entries, 14, NOW);
+    expect(weeks).toHaveLength(2);
+    // Uke 1 starter mandag 2025-06-02
+    expect(weeks[0].weekStart).toBe('2025-06-02');
+    // snitt belastning: (8 + 0 + 4 + 0 + 0 + 0 + 0) / 7 = 12/7
+    expect(weeks[0].load).toBeCloseTo(12 / 7);
+    // snitt smerte: (4 + 0 + 2) / 7 = 6/7
+    expect(weeks[0].pain).toBeCloseTo(6 / 7);
+    // sum varighet
+    expect(weeks[0].durationMin).toBe(90);
+    // Uke 2 starter mandag 2025-06-09 og inneholder søndag 15.06
+    expect(weeks[1].weekStart).toBe('2025-06-09');
+    expect(weeks[1].load).toBeCloseTo(16 / 7);
+    expect(weeks[1].pain).toBeCloseTo(0);
+    expect(weeks[1].durationMin).toBe(135);
+  });
+
+  it('weeklyTrendSeries runder 90 dager opp til 13 hele uker', () => {
+    const weeks = weeklyTrendSeries([], 90, NOW);
+    expect(weeks).toHaveLength(13);
+    // Første uke starter mandagen i uka 89 dager før i dag
+    expect(weeks[0].weekStart).toBe(weekStartISO(iso(89)));
+    // Siste uke starter mandagen i inneværende uke
+    expect(weeks[12].weekStart).toBe(weekStartISO(iso(0)));
+  });
+});
+
+describe('weekStartISO (norsk uke: mandag–søndag)', () => {
+  it('returnerer mandag for alle dager i samme uke', () => {
+    // 2025-06-09 er en mandag
+    expect(weekStartISO('2025-06-09')).toBe('2025-06-09'); // man
+    expect(weekStartISO('2025-06-10')).toBe('2025-06-09'); // tir
+    expect(weekStartISO('2025-06-14')).toBe('2025-06-09'); // lør
+    expect(weekStartISO('2025-06-15')).toBe('2025-06-09'); // søn
+  });
+
+  it('gir neste mandag for søndag (ikke søndag selv)', () => {
+    // 2025-06-15 er søndag — uka starter mandag 09.06, ikke søndag 15.06
+    expect(weekStartISO('2025-06-15')).not.toBe('2025-06-15');
+    expect(weekStartISO('2025-06-16')).toBe('2025-06-16'); // neste mandag
   });
 });
 
