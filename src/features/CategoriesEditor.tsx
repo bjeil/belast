@@ -5,7 +5,8 @@ import {
   addCategory,
   renameCategory,
   deactivateCategory,
-  activateCategory
+  activateCategory,
+  moveCategory
 } from '../lib/categories';
 import { syncManager } from '../lib/sync';
 import { Card, CardTitle } from '../components/ui';
@@ -49,6 +50,16 @@ export default function CategoriesEditor() {
     void syncManager.sync();
   };
 
+  const handleMove = async (kind: CategoryKind, key: string, direction: 'up' | 'down') => {
+    const updated = await moveCategory(kind, key, direction);
+    if (!updated) return;
+    setCategories((prev) => {
+      const others = prev.filter((c) => c.kind !== kind);
+      return [...others, ...updated];
+    });
+    void syncManager.sync();
+  };
+
   const handleToggleActive = async (c: Category) => {
     if (c.active) {
       await deactivateCategory(c.kind, c.key);
@@ -80,8 +91,28 @@ export default function CategoriesEditor() {
               <p className="text-xs font-semibold uppercase tracking-wider text-app-text/60">{title}</p>
               <p className="mb-2 text-[11px] text-app-text/45">{hint}</p>
               <div className="space-y-1.5">
-                {active.map((c) => (
+                {active.map((c, i) => (
                   <div key={c.key} className="flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <button
+                        onClick={() => handleMove(kind, c.key, 'up')}
+                        disabled={i === 0}
+                        className="rounded px-1 text-[10px] leading-3 text-app-text/50 hover:bg-app-text/10 hover:text-app-text disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+                        aria-label={`Flytt ${c.label} opp`}
+                        title="Flytt opp"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => handleMove(kind, c.key, 'down')}
+                        disabled={i === active.length - 1}
+                        className="rounded px-1 text-[10px] leading-3 text-app-text/50 hover:bg-app-text/10 hover:text-app-text disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+                        aria-label={`Flytt ${c.label} ned`}
+                        title="Flytt ned"
+                      >
+                        ▼
+                      </button>
+                    </div>
                     <input
                       type="text"
                       defaultValue={c.label}
