@@ -8,10 +8,15 @@ import {
   hardDeleteEntry,
   addConflict,
   getSyncMeta,
+  kvGet,
+  kvSet
+} from './db';
+import {
   getDirtyCategories,
   markCategorySynced,
-  getCategoryRow
-} from './db';
+  getCategoryRow,
+  saveCategoryRow
+} from './categories';
 import {
   entryToRow,
   rowToEntry,
@@ -24,7 +29,6 @@ import {
 } from './supabaseTypes';
 import { migrateLegacyActivityKeys } from './migrations';
 import type { Category, DayEntry } from './types';
-import { kvGet, kvSet } from './db';
 
 /**
  * Synkronisering mellom lokal IndexedDB og Supabase.
@@ -51,6 +55,18 @@ export interface SyncState {
 type Listener = (state: SyncState) => void;
 
 const LAST_SYNC_KEY = 'sync:lastSyncAt';
+
+/** Øvre grense for én synk-runde — hindrer at appen henger i «Synkroniserer…». */
+const SYNC_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} tidsavbrutt etter ${ms / 1000} s`)), ms)
+    )
+  ]);
+}
 
 class SyncManager {
   private state: SyncState = { status: 'idle', lastSyncAt: null, lastError: null, pendingPush: 0 };
@@ -118,10 +134,22 @@ class SyncManager {
     this.syncing = true;
     this.setState({ status: 'syncing', lastError: null });
     try {
-      await this.push(userId);
-      await this.pull(userId);
-      await this.pushCategories(userId);
-      await this.pullCategories(userId);
+      // Watchdog: synken skal aldri kunne henge appen i «Synkroniserer…»-modus
+      await withTimeout(
+        (async () => {
+          await this.push(userId);
+          await this.pull(userId);
+          // Kategorisynk er «best effort» — skal aldri ta ned dag-synken
+          try {
+            await this.pushCategories(userId);
+            await this.pullCategories(userId);
+          } catch (e) {
+            console.warn('[belast] Kategorisynk feilet (ikke kritisk):', e);
+          }
+        })(),
+        SYNC_TIMEOUT_MS,
+        'Synkronisering'
+      );
       await kvSet(LAST_SYNC_KEY, new Date().toISOString());
       this.setState({
         status: 'idle',
@@ -271,16 +299,14 @@ class SyncManager {
       const cloudCat = rowToCategory(raw);
       const local = await getCategoryRow(raw.kind, raw.key);
       if (!local) {
-        await db.categories.add({ ...cloudCat, dirty: false });
+        await saveCategoryRow({ ...cloudCat, dirty: false });
         continue;
       }
       if (local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
         continue; // lokal endring vinner, pushes neste runde
       }
       if (new Date(raw.updated_at) >= new Date(local.updatedAt) && !sameCategoryContent(local, cloudCat)) {
-        if (local.id !== undefined) {
-          await db.categories.put({ ...cloudCat, id: local.id, dirty: false }, local.id);
-        }
+        await saveCategoryRow({ ...cloudCat, dirty: false });
       }
     }
   }

@@ -143,6 +143,20 @@ dagens dato. Slik får du den nye versjonen:
 **Synk-feil?** Sjekk synk-indikatoren i toppmenyen. Appen fungerer alltid offline —
 endringer lagres lokalt og synkroniseres når nettet er tilbake.
 
+**Appen henger på «Synkroniserer…», eller viser bare bakgrunnen etter oppdatering?**
+Dette skjer hvis en IndexedDB-oppgradering blokkeres fordi en annen instans fortsatt
+har databasen åpen. Løsning:
+
+- **Lukk alle faner** med appen (også PWA-appen på startskjermen — sveip den bort
+  fra app-oversikten), åpne appen på nytt.
+- **iPhone (Safari/PWA)**: lukk alle faner, gå til Innstillinger → Safari →
+  «Tøm logg og nettsteddata», legg appen til på startskjermen på nytt.
+- **Android (Chrome)**: lukk appen helt, trykk lenge på ikonet → Appinfo → Lagring →
+  «Tøm hurtigbuffer», åpne på nytt.
+
+Appen nullstiller seg selv ved neste oppstart hvis den oppdager en låst database,
+og data hentes ned fra skyen igjen ved innlogging.
+
 ## Teknologi
 
 React 18 + TypeScript + Vite + Tailwind CSS, Dexie (IndexedDB), Recharts (grafer),
