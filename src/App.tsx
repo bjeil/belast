@@ -13,15 +13,27 @@ import { syncManager, type SyncState } from './lib/sync';
 type Tab = 'home' | 'log' | 'plans' | 'stats' | 'settings';
 
 function SyncIndicator({ state }: { state: SyncState }) {
+  // Når status er idle/error men det fortsatt er ventende endringer, vis antallet
+  // og siste feil — ellers sitter brukeren igjen med «Venter på synk (N)» uten forklaring.
+  const pending = state.pendingPush > 0 && state.status !== 'syncing';
   const map: Record<SyncState['status'], { icon: string; text: string; cls: string }> = {
-    idle: { icon: '☁️', text: state.pendingPush > 0 ? `Venter på synk (${state.pendingPush})` : 'Synkronisert', cls: 'text-emerald-500 dark:text-emerald-400' },
+    idle: {
+      icon: pending ? '⏳' : '☁️',
+      text: pending ? `Venter på synk (${state.pendingPush})` : 'Synkronisert',
+      cls: pending ? 'text-app-gold' : 'text-emerald-500 dark:text-emerald-400'
+    },
     syncing: { icon: '🔄', text: 'Synkroniserer …', cls: 'text-app-gold animate-pulse' },
     error: { icon: '⚠️', text: 'Synkfeil — lokal data er trygg', cls: 'text-app-pain-soft' },
     offline: { icon: '📴', text: 'Offline — endringer lagres lokalt', cls: 'text-app-text/60' }
   };
   const s = map[state.status];
+  const title = [
+    state.lastError,
+    pending ? `${state.pendingPush} endring(er) venter på synk` : null,
+    `Sist synk: ${state.lastSyncAt ? new Date(state.lastSyncAt).toLocaleString('nb-NO') : 'aldri'}`
+  ].filter(Boolean).join('\n');
   return (
-    <span className={`text-[11px] ${s.cls}`} title={state.lastError ?? s.text}>
+    <span className={`text-[11px] ${s.cls}`} title={title}>
       {s.icon} {s.text}
     </span>
   );

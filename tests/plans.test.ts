@@ -206,4 +206,44 @@ describe('planToRow / rowToPlan / samePlanContent', () => {
     expect(samePlanContent(a, makePlan({ name: 'B' }))).toBe(false);
     expect(samePlanContent(a, makePlan({ favorite: true }))).toBe(false);
   });
+
+  it('samePlanContent er robust mot nøkkelrekkefølge i jsonb (fra Supabase)', () => {
+    // Postgres jsonb returnerer alltid nøkler alfabetisk sortert:
+    // {"durationMin":60,"load":5,"note":"x","activity":"kamp"} (activity sist!)
+    // Lokalt kan rekkefølgen være en annen. Sammenligningen må ikke brytes av dette.
+    const local = makePlan({
+      days: emptyWeekDays().map((d) =>
+        d.weekday === 0
+          ? { ...d, sessions: [{ activity: 'kamp', load: 5, durationMin: 60, note: 'x' }] }
+          : d
+      )
+    });
+    // Simuler jsonb-retur med alfabetisk nøkkelrekkefølge
+    const fromJsonb = makePlan({
+      days: emptyWeekDays().map((d) =>
+        d.weekday === 0
+          ? { ...d, sessions: [{ durationMin: 60, load: 5, note: 'x', activity: 'kamp' }] as never }
+          : d
+      )
+    });
+    expect(samePlanContent(local, fromJsonb)).toBe(true);
+  });
+
+  it('samePlanContent er false når innhold faktisk er forskjellig', () => {
+    const base = makePlan({
+      days: emptyWeekDays().map((d) =>
+        d.weekday === 1
+          ? { ...d, sessions: [{ activity: 'gym', load: 7, durationMin: 45 }] }
+          : d
+      )
+    });
+    const annenLoad = makePlan({
+      days: emptyWeekDays().map((d) =>
+        d.weekday === 1
+          ? { ...d, sessions: [{ activity: 'gym', load: 8, durationMin: 45 }] }
+          : d
+      )
+    });
+    expect(samePlanContent(base, annenLoad)).toBe(false);
+  });
 });

@@ -90,12 +90,39 @@ export function rowToPlan(row: WeekPlanRow): WeekPlan {
   };
 }
 
+/**
+ * Robust dyp-sammenligning av vilkårlige verdier (objekter, arrayer, primitiver).
+ * Rekkefølgen på nøkler i objekter er irrelevant — viktig fordi Postgres
+ * jsonb alltid returnerer nøkler i alfabetisk rekkefølge, mens lokalt
+ * JSON.stringify kan ha en annen rekkefølge.
+ */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const aKeys = Object.keys(a as Record<string, unknown>);
+    const bKeys = Object.keys(b as Record<string, unknown>);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((k) =>
+      Object.prototype.hasOwnProperty.call(b, k) &&
+      deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])
+    );
+  }
+  return false;
+}
+
 /** Sammenligner to planversjoner (innhold, ikke tidsstempel). */
 export function samePlanContent(a: WeekPlan, b: WeekPlan): boolean {
   return (
     a.name === b.name &&
     a.favorite === b.favorite &&
-    JSON.stringify(a.days) === JSON.stringify(b.days)
+    deepEqual(a.days, b.days)
   );
 }
 
@@ -131,8 +158,8 @@ export function sameDayContent(a: DayEntry, b: DayEntry): boolean {
     a.load === b.load &&
     a.durationMin === b.durationMin &&
     a.note === b.note &&
-    JSON.stringify(a.activities) === JSON.stringify(b.activities) &&
-    JSON.stringify(a.pains) === JSON.stringify(b.pains)
+    deepEqual(a.activities, b.activities) &&
+    deepEqual(a.pains, b.pains)
   );
 }
 
