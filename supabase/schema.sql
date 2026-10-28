@@ -46,9 +46,12 @@ declare
   defaults_activity text[][] := array[
     array['kamp_akademi', 'Kamp – akademi', '10'],
     array['trening_akademi', 'Trening – akademi', '20'],
-    array['styrketrening', 'Styrketrening', '30'],
-    array['egentrening', 'Egentrening', '40'],
-    array['annet', 'Annet', '50']
+    array['kamp_hana', 'Kamp – Hana', '30'],
+    array['trening_hana', 'Trening – Hana', '40'],
+    array['egentrening', 'Egentrening', '50'],
+    array['styrketrening', 'Styrketrening', '60'],
+    array['gym', 'Gym', '70'],
+    array['annet', 'Annet', '999']
   ];
   defaults_body_part text[][] := array[
     array['rygg', 'Rygg', '10'],
