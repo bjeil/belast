@@ -33,7 +33,7 @@ import {
 } from '../lib/stats';
 import { formatDayShort, formatDayLong, WEEKDAY_LABELS, parseDay, weekStartISO } from '../lib/dates';
 import { chartTheme, chartTooltipStyle } from '../lib/theme';
-import { Card, CardTitle, StatCard, EmptyState, loadColorBgClass, loadColorClass } from '../components/ui';
+import { Card, CardTitle, StatCard, EmptyState, loadColorBgClass, scoreBoxClass } from '../components/ui';
 
 const WINDOWS: { id: StatsWindow; label: string }[] = [
   { id: 7, label: '7 d' },
@@ -443,12 +443,12 @@ function LogTable({ rows, onBack }: { rows: LogTableRow[]; onBack: () => void })
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-app-border/15 text-left text-[11px] font-semibold uppercase tracking-wider text-app-text/50">
-                <th className="py-2 pr-3">Dato</th>
-                <th className="py-2 pr-3">Ukedag</th>
-                <th className="py-2 pr-3 text-right">Tid (t)</th>
-                <th className="py-2 pr-3 text-right">Belastning</th>
-                <th className="py-2 pr-3 text-right">Søvn</th>
-                <th className="py-2 pr-3 text-right">Næring</th>
+                <th className="py-2 pr-2">Dato</th>
+                <th className="py-2 pr-2">Dag</th>
+                <th className="py-2 pr-2 text-right">Tid (t)</th>
+                <th className="py-2 pr-2 text-right">Bel.</th>
+                <th className="py-2 pr-2 text-right">Søvn</th>
+                <th className="py-2 pr-2 text-right">Næring</th>
                 <th className="py-2 text-right">Smerte</th>
               </tr>
             </thead>
@@ -458,48 +458,50 @@ function LogTable({ rows, onBack }: { rows: LogTableRow[]; onBack: () => void })
                   key={r.date}
                   className={`border-b border-app-border/10 ${r.logged ? '' : 'text-app-text/40'}`}
                 >
-                  <td className="py-2 pr-3" title={formatDayLong(r.date)}>
+                  <td className="py-2 pr-2" title={formatDayLong(r.date)}>
                     {formatDayShort(r.date)}
                   </td>
-                  <td className="py-2 pr-3">{r.weekday}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
+                  <td className="py-2 pr-2">{r.weekday}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums">
                     {r.durationHours === null ? '–' : r.durationHours.toFixed(1)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
+                  <td className="py-2 pr-2 text-right tabular-nums">
                     {r.load === null ? (
                       '–'
                     ) : (
                       <span
-                        className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${loadColorClass(r.load)}`}
+                        className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${scoreBoxClass('load', r.load)}`}
                       >
                         {r.load}
                       </span>
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
+                  <td className="py-2 pr-2 text-right tabular-nums">
                     {r.sleepScore === null ? (
                       '–'
                     ) : (
-                      <span className="inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold text-app-sleep">
+                      <span className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${scoreBoxClass('sleep', r.sleepScore)}`}>
                         {r.sleepScore}
                       </span>
                     )}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums">
+                  <td className="py-2 pr-2 text-right tabular-nums">
                     {r.nutritionScore === null ? (
                       '–'
                     ) : (
-                      <span className="inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold text-app-nutrition">
+                      <span className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${scoreBoxClass('nutrition', r.nutritionScore)}`}>
                         {r.nutritionScore}
                       </span>
                     )}
                   </td>
-                  <td
-                    className={`py-2 text-right tabular-nums ${
-                      r.hasPain ? 'font-semibold text-app-pain-soft' : ''
-                    }`}
-                  >
-                    {r.pain > 0 ? r.pain : '–'}
+                  <td className="py-2 text-right tabular-nums">
+                    {r.pain > 0 ? (
+                      <span className={`inline-block min-w-6 rounded-md px-1.5 py-0.5 text-center text-xs font-semibold ${scoreBoxClass('pain', r.pain)}`}>
+                        {r.pain}
+                      </span>
+                    ) : (
+                      '–'
+                    )}
                   </td>
                 </tr>
               ))}

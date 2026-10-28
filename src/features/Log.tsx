@@ -23,7 +23,7 @@ import { getAllCategories } from '../lib/categories';
 import { deleteEntry, getAllEntries, getEntry, saveEntry } from '../lib/db';
 import { syncManager } from '../lib/sync';
 import { formatDayLong, isFuture, isToday, toISODate, WEEKDAY_LABELS } from '../lib/dates';
-import { Card, CardTitle, Slider, loadLabel, painLabel, loadColorClass } from '../components/ui';
+import { Card, CardTitle, Slider, loadLabel, painLabel } from '../components/ui';
 
 interface LogProps {
   onSaved: () => void;
@@ -178,8 +178,21 @@ export default function Log({ onSaved }: LogProps) {
     const rest =
       e.activities.length === 0 ||
       (e.activities.length === 1 && e.activities[0] === REST_DAY);
-    const loadColor = rest ? loadColorClass(0) : loadColorClass(e.load);
-    return `${base} ${selected} ${painRing} ${loadColor}`;
+    const hasActivity = !rest;
+    const hasLoad = e.load !== undefined && e.load !== null;
+    const hasSleep = e.sleepScore !== undefined && e.sleepScore !== null;
+    const hasNutrition = e.nutritionScore !== undefined && e.nutritionScore !== null;
+    const allRegistered = hasActivity && hasLoad && hasSleep && hasNutrition;
+    const anyRegistered = hasActivity || hasLoad || hasSleep || hasNutrition || e.durationMin !== undefined;
+    let bgClass: string;
+    if (allRegistered) {
+      bgClass = 'bg-score-cyan text-[#0c1826] dark:text-white';
+    } else if (anyRegistered) {
+      bgClass = 'bg-load-mid text-[#132436]';
+    } else {
+      bgClass = 'bg-rest/40 text-app-text/50';
+    }
+    return `${base} ${selected} ${painRing} ${bgClass}`;
   };
 
   return (
@@ -226,16 +239,16 @@ export default function Log({ onSaved }: LogProps) {
         </div>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-app-text/55">
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-app-gold" /> Hard belastning
+            <span className="h-2.5 w-2.5 rounded-full bg-score-cyan" /> Alt registrert
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-load-mid" /> Trening
+            <span className="h-2.5 w-2.5 rounded-full bg-load-mid" /> Ufullstendig
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-rest/60" /> Hvile
+            <span className="h-2.5 w-2.5 rounded-full bg-rest/60" /> Ingen registrering
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-app-pain-soft" /> Smerte
+            <span className="h-2.5 w-2.5 rounded-full ring-2 ring-app-pain-soft" /> Smerte
           </span>
         </div>
       </Card>
