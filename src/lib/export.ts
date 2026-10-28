@@ -1,21 +1,21 @@
-import type { DayEntry, Profile } from './types';
-import { ACTIVITY_LABELS, BODY_PART_LABELS } from './types';
+import type { Category, DayEntry } from './types';
+import { categoryLabel } from './categories';
 import { formatDayLong } from './dates';
 
 export interface BackupFile {
   format: 'belast-backup';
-  version: 1;
+  version: 2;
   exportedAt: string;
-  profile: Profile;
+  categories?: Category[]; // brukerens kategorier (etiketter)
   entries: DayEntry[];
 }
 
-export function buildBackup(profile: Profile, entries: DayEntry[]): BackupFile {
+export function buildBackup(entries: DayEntry[], categories: Category[] = []): BackupFile {
   return {
     format: 'belast-backup',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    profile,
+    categories,
     entries
   };
 }
@@ -25,14 +25,14 @@ export function downloadJson(data: unknown, filename: string): void {
   triggerDownload(blob, filename);
 }
 
-export function exportBackup(profile: Profile, entries: DayEntry[]): void {
+export function exportBackup(entries: DayEntry[], categories: Category[] = []): void {
   const date = new Date().toISOString().slice(0, 10);
-  downloadJson(buildBackup(profile, entries), `belast-backup-${date}.json`);
+  downloadJson(buildBackup(entries, categories), `belast-backup-${date}.json`);
 }
 
 export function parseBackup(text: string): BackupFile {
   const parsed = JSON.parse(text);
-  if (parsed?.format !== 'belast-backup' || parsed?.version !== 1) {
+  if (parsed?.format !== 'belast-backup' || (parsed?.version !== 1 && parsed?.version !== 2)) {
     throw new Error('Ugyldig backup-fil');
   }
   if (!Array.isArray(parsed.entries)) {
@@ -41,7 +41,16 @@ export function parseBackup(text: string): BackupFile {
   return parsed as BackupFile;
 }
 
-export function exportCsv(entries: DayEntry[]): void {
+/** Etikett for aktivitet (med fallback for ukjente nøkler). */
+function activityLabel(categories: Category[], key: string): string {
+  return categoryLabel(categories, 'activity', key).label;
+}
+
+function bodyPartLabel(categories: Category[], key: string): string {
+  return categoryLabel(categories, 'body_part', key).label;
+}
+
+export function exportCsv(entries: DayEntry[], categories: Category[] = []): void {
   const header = [
     'Dato',
     'Ukesdag',
@@ -58,7 +67,7 @@ export function exportCsv(entries: DayEntry[]): void {
 
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
   for (const e of sorted) {
-    const activities = e.activities.map((a) => ACTIVITY_LABELS[a]).join(', ');
+    const activities = e.activities.map((a) => activityLabel(categories, a)).join(', ');
     const weekday = formatDayLong(e.date).split(' ')[0];
     if (e.pains.length === 0) {
       rows.push(
@@ -85,7 +94,7 @@ export function exportCsv(entries: DayEntry[]): void {
             activities,
             String(e.load),
             e.durationMin ? String(e.durationMin) : '',
-            BODY_PART_LABELS[p.bodyPart],
+            bodyPartLabel(categories, p.bodyPart),
             String(p.level),
             p.note ?? '',
             e.note ?? ''

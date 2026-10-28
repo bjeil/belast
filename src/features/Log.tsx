@@ -11,19 +11,19 @@ import {
 } from 'date-fns';
 import { nb } from 'date-fns/locale';
 import {
-  ACTIVITY_TYPES,
-  ACTIVITY_LABELS,
-  BODY_PARTS,
-  BODY_PART_LABELS,
+  REST_DAY,
+  REST_DAY_LABEL,
   type ActivityType,
   type BodyPart,
+  type Category,
   type DayEntry,
   type PainEntry
 } from '../lib/types';
+import { getAllCategories } from '../lib/categories';
 import { deleteEntry, getAllEntries, getEntry, saveEntry } from '../lib/db';
 import { syncManager } from '../lib/sync';
 import { formatDayLong, isFuture, isToday, toISODate, WEEKDAY_LABELS } from '../lib/dates';
-import { Card, CardTitle, Slider, loadLabel, painLabel } from '../components/ui';
+import { Card, CardTitle, Slider, loadLabel, painLabel, loadColorClass } from '../components/ui';
 
 interface LogProps {
   onSaved: () => void;
@@ -40,20 +40,35 @@ const emptyDraft = (date: string): DayEntry => ({
   updatedAt: new Date().toISOString()
 });
 
+const DURATION_PRESETS = [30, 60, 90];
+
 export default function Log({ onSaved }: LogProps) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => toISODate(new Date()));
   const [entries, setEntries] = useState<DayEntry[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [draft, setDraft] = useState<DayEntry | null>(null);
   const [editing, setEditing] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadEntries = async () => setEntries(await getAllEntries());
+  const loadCategories = async () => setCategories(await getAllCategories());
 
   useEffect(() => {
     loadEntries();
+    loadCategories();
   }, []);
+
+  const activityCategories = useMemo(
+    () => categories.filter((c) => c.kind === 'activity' && c.active).sort((a, b) => a.sortOrder - b.sortOrder),
+    [categories]
+  );
+  const bodyPartCategories = useMemo(
+    () => categories.filter((c) => c.kind === 'body_part' && c.active).sort((a, b) => a.sortOrder - b.sortOrder),
+    [categories]
+  );
+  const defaultBodyPart = bodyPartCategories[0]?.key ?? 'annet';
 
   const byDate = useMemo(() => new Map(entries.map((e) => [e.date, e])), [entries]);
 
@@ -78,10 +93,17 @@ export default function Log({ onSaved }: LogProps) {
 
   const toggleActivity = (a: ActivityType) => {
     if (!draft) return;
-    let activities = draft.activities.filter((x) => x !== a);
-    if (!activities.includes(a)) {
-      if (a === 'hviledag') activities = ['hviledag'];
-      else activities = [...activities.filter((x) => x !== 'hviledag'), a];
+    if (draft.activities.includes(a)) {
+      // Avhuking: fjern valget
+      setDraft({ ...draft, activities: draft.activities.filter((x) => x !== a) });
+      return;
+    }
+    // Påhuking: «hviledag» er eksklusivt, andre kan kombineres
+    let activities: ActivityType[];
+    if (a === REST_DAY) {
+      activities = [REST_DAY];
+    } else {
+      activities = [...draft.activities.filter((x) => x !== REST_DAY), a];
     }
     setDraft({ ...draft, activities });
   };
@@ -90,7 +112,7 @@ export default function Log({ onSaved }: LogProps) {
     if (!draft) return;
     setDraft({
       ...draft,
-      pains: [...draft.pains, { bodyPart: 'kne', level: 3 }]
+      pains: [...draft.pains, { bodyPart: defaultBodyPart, level: 3 }]
     });
   };
 
@@ -107,7 +129,7 @@ export default function Log({ onSaved }: LogProps) {
 
   const isRest =
     draft && (draft.activities.length === 0 ||
-      (draft.activities.length === 1 && draft.activities[0] === 'hviledag'));
+      (draft.activities.length === 1 && draft.activities[0] === REST_DAY));
 
   const save = async () => {
     if (!draft) return;
@@ -146,20 +168,14 @@ export default function Log({ onSaved }: LogProps) {
     const e = byDate.get(iso);
     const base =
       'relative flex h-11 items-center justify-center rounded-xl text-sm transition-colors';
-    const selected = iso === selectedDate ? 'ring-2 ring-viking-gold' : '';
-    const today = isToday(iso) ? 'font-bold text-viking-gold' : 'text-viking-white/85';
+    const selected = iso === selectedDate ? 'ring-2 ring-app-gold' : '';
+    const today = isToday(iso) ? 'font-bold text-app-gold' : 'text-app-text/85';
     const future = isFuture(iso) ? 'opacity-40' : '';
-    if (!e) return `${base} ${selected} ${today} ${future} hover:bg-white/5`;
+    if (!e) return `${base} ${selected} ${today} ${future} hover:bg-app-hover/10`;
     const rest =
       e.activities.length === 0 ||
-      (e.activities.length === 1 && e.activities[0] === 'hviledag');
-    const loadColor = rest
-      ? 'bg-white/5 text-viking-white/50'
-      : e.load >= 8
-        ? 'bg-viking-gold text-viking-blue-deep font-bold'
-        : e.load >= 5
-          ? 'bg-viking-blue-light text-viking-white'
-          : 'bg-viking-blue/60 text-viking-white/80';
+      (e.activities.length === 1 && e.activities[0] === REST_DAY);
+    const loadColor = rest ? loadColorClass(0) : loadColorClass(e.load);
     return `${base} ${selected} ${loadColor}`;
   };
 
@@ -170,7 +186,7 @@ export default function Log({ onSaved }: LogProps) {
           <button className="btn-ghost px-3 py-1.5" onClick={() => setMonth((m) => addMonths(m, -1))}>
             ←
           </button>
-          <span className="font-display text-sm uppercase tracking-widest text-viking-white">
+          <span className="font-display text-sm uppercase tracking-widest text-app-text">
             {format(month, 'MMMM yyyy', { locale: nb })}
           </span>
           <button
@@ -181,7 +197,7 @@ export default function Log({ onSaved }: LogProps) {
             →
           </button>
         </div>
-        <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-viking-white/50">
+        <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-app-text/50">
           {WEEKDAY_LABELS.map((d) => (
             <div key={d}>{d}</div>
           ))}
@@ -199,24 +215,24 @@ export default function Log({ onSaved }: LogProps) {
               >
                 {format(d, 'd')}
                 {e && e.pains.length > 0 && (
-                  <span className="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-[#E05A66]" />
+                  <span className="absolute bottom-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-app-pain-soft" />
                 )}
               </button>
             );
           })}
         </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-viking-white/55">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-app-text/55">
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-viking-gold" /> Hard belastning
+            <span className="h-2.5 w-2.5 rounded-full bg-app-gold" /> Hard belastning
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-viking-blue-light" /> Trening
+            <span className="h-2.5 w-2.5 rounded-full bg-load-mid" /> Trening
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-white/10" /> Hvile
+            <span className="h-2.5 w-2.5 rounded-full bg-rest/60" /> Hvile
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#E05A66]" /> Smerte
+            <span className="h-2.5 w-2.5 rounded-full bg-app-pain-soft" /> Smerte
           </span>
         </div>
       </Card>
@@ -229,29 +245,40 @@ export default function Log({ onSaved }: LogProps) {
           </CardTitle>
 
           <div className="mb-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-viking-white/60">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-app-text/60">
               Type trening
             </p>
             <div className="flex flex-wrap gap-2">
-              {ACTIVITY_TYPES.map((a) => {
-                const active = draft.activities.includes(a);
+              {activityCategories.map((c) => {
+                const active = draft.activities.includes(c.key);
                 return (
                   <button
-                    key={a}
-                    onClick={() => toggleActivity(a)}
+                    key={c.key}
+                    onClick={() => toggleActivity(c.key)}
+                    aria-pressed={active}
                     className={`chip ${
                       active
-                        ? a === 'hviledag'
-                          ? 'border-white/30 bg-white/10 text-viking-white'
-                          : 'border-viking-gold bg-viking-gold/15 text-viking-gold'
-                        : 'border-white/15 text-viking-white/70 hover:border-white/30'
+                        ? 'border-app-gold bg-app-gold/20 text-app-gold'
+                        : 'border-app-border/20 text-app-text/70 hover:border-app-border/40'
                     }`}
                   >
-                    {active && a !== 'hviledag' ? '✓ ' : ''}
-                    {ACTIVITY_LABELS[a]}
+                    {active ? '✓ ' : ''}
+                    {c.label}
                   </button>
                 );
               })}
+              <button
+                onClick={() => toggleActivity(REST_DAY)}
+                aria-pressed={draft.activities.includes(REST_DAY)}
+                className={`chip ${
+                  draft.activities.includes(REST_DAY)
+                    ? 'border-app-border/40 bg-app-hover/15 text-app-text'
+                    : 'border-app-border/20 text-app-text/70 hover:border-app-border/40'
+                }`}
+              >
+                {draft.activities.includes(REST_DAY) ? '✓ ' : ''}
+                {REST_DAY_LABEL}
+              </button>
             </div>
           </div>
 
@@ -259,11 +286,11 @@ export default function Log({ onSaved }: LogProps) {
             <>
               <div className="mb-5">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-viking-white/60">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-app-text/60">
                     Opplevd belastning
                   </p>
-                  <span className="font-display text-lg text-viking-gold">
-                    {draft.load} <span className="text-xs font-body text-viking-white/60">· {loadLabel(draft.load)}</span>
+                  <span className="font-display text-lg text-app-gold">
+                    {draft.load} <span className="text-xs font-body text-app-text/60">· {loadLabel(draft.load)}</span>
                   </span>
                 </div>
                 <Slider
@@ -271,17 +298,36 @@ export default function Log({ onSaved }: LogProps) {
                   onChange={(v) => setDraft({ ...draft, load: v })}
                   ariaLabel="Opplevd belastning"
                 />
-                <div className="mt-1 flex justify-between text-[10px] text-viking-white/40">
+                <div className="mt-1 flex justify-between text-[10px] text-app-text/40">
                   <span>1</span>
                   <span>10</span>
                 </div>
               </div>
 
               <div className="mb-5">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-viking-white/60">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-app-text/60">
                   Varighet (valgfritt)
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {DURATION_PRESETS.map((min) => {
+                    const active = draft.durationMin === min;
+                    return (
+                      <button
+                        key={min}
+                        onClick={() =>
+                          setDraft({ ...draft, durationMin: active ? undefined : min })
+                        }
+                        aria-pressed={active}
+                        className={`chip ${
+                          active
+                            ? 'border-app-gold bg-app-gold/20 text-app-gold'
+                            : 'border-app-border/20 text-app-text/70 hover:border-app-border/40'
+                        }`}
+                      >
+                        {min} min
+                      </button>
+                    );
+                  })}
                   <input
                     type="number"
                     min={0}
@@ -295,9 +341,9 @@ export default function Log({ onSaved }: LogProps) {
                         durationMin: e.target.value === '' ? undefined : Number(e.target.value)
                       })
                     }
-                    className="w-32 rounded-xl border border-white/15 bg-viking-blue-deep px-4 py-2.5 text-viking-white outline-none focus:border-viking-gold"
+                    className="w-28 rounded-xl border border-app-border/20 bg-app-surface-deep px-4 py-2.5 text-app-text outline-none focus:border-app-gold"
                   />
-                  <span className="text-sm text-viking-white/60">min</span>
+                  <span className="text-sm text-app-text/60">min</span>
                 </div>
               </div>
             </>
@@ -305,44 +351,44 @@ export default function Log({ onSaved }: LogProps) {
 
           <div className="mb-5">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-viking-white/60">
+              <p className="text-xs font-semibold uppercase tracking-wider text-app-text/60">
                 Skader og vondter
               </p>
-              <button onClick={addPain} className="text-xs font-semibold text-viking-gold hover:underline">
+              <button onClick={addPain} className="text-xs font-semibold text-app-gold hover:underline">
                 + Legg til
               </button>
             </div>
             {draft.pains.length === 0 && (
-              <p className="text-sm text-viking-white/50">Ingen smerter registrert.</p>
+              <p className="text-sm text-app-text/50">Ingen smerter registrert.</p>
             )}
             <div className="space-y-3">
               {draft.pains.map((p, idx) => (
-                <div key={idx} className="rounded-xl border border-white/10 bg-viking-blue-deep/60 p-3">
+                <div key={idx} className="rounded-xl border border-app-border/15 bg-app-surface-deep/60 p-3">
                   <div className="mb-2 flex items-center gap-2">
                     <select
                       value={p.bodyPart}
                       onChange={(e) => updatePain(idx, { bodyPart: e.target.value as BodyPart })}
-                      className="flex-1 rounded-lg border border-white/15 bg-viking-blue px-3 py-2 text-sm text-viking-white outline-none focus:border-viking-gold"
+                      className="flex-1 rounded-lg border border-app-border/20 bg-app-surface-2 px-3 py-2 text-sm text-app-text outline-none focus:border-app-gold"
                       aria-label="Kroppsdel"
                     >
-                      {BODY_PARTS.map((b) => (
-                        <option key={b} value={b}>
-                          {BODY_PART_LABELS[b]}
+                      {bodyPartCategories.map((b) => (
+                        <option key={b.key} value={b.key}>
+                          {b.label}
                         </option>
                       ))}
                     </select>
                     <button
                       onClick={() => removePain(idx)}
-                      className="rounded-lg px-2 py-2 text-sm text-[#E05A66] hover:bg-viking-red/20"
+                      className="rounded-lg px-2 py-2 text-sm text-app-pain-soft hover:bg-app-pain-soft/15"
                       aria-label="Fjern vondt"
                     >
                       ✕
                     </button>
                   </div>
                   <div className="mb-1 flex items-center justify-between">
-                    <span className="text-xs text-viking-white/60">Smertenivå</span>
-                    <span className="font-display text-base text-[#E05A66]">
-                      {p.level} <span className="text-[11px] font-body text-viking-white/60">· {painLabel(p.level)}</span>
+                    <span className="text-xs text-app-text/60">Smertenivå</span>
+                    <span className="font-display text-base text-app-pain-soft">
+                      {p.level} <span className="text-[11px] font-body text-app-text/60">· {painLabel(p.level)}</span>
                     </span>
                   </div>
                   <Slider
@@ -356,7 +402,7 @@ export default function Log({ onSaved }: LogProps) {
                     placeholder="Kommentar (valgfritt)"
                     value={p.note ?? ''}
                     onChange={(e) => updatePain(idx, { note: e.target.value })}
-                    className="mt-2 w-full rounded-lg border border-white/10 bg-viking-blue px-3 py-2 text-sm text-viking-white outline-none placeholder:text-viking-white/35 focus:border-viking-gold"
+                    className="mt-2 w-full rounded-lg border border-app-border/15 bg-app-surface-2 px-3 py-2 text-sm text-app-text outline-none placeholder:text-app-text/35 focus:border-app-gold"
                   />
                 </div>
               ))}
@@ -364,7 +410,7 @@ export default function Log({ onSaved }: LogProps) {
           </div>
 
           <div className="mb-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-viking-white/60">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-app-text/60">
               Kommentar (valgfritt)
             </p>
             <textarea
@@ -372,12 +418,12 @@ export default function Log({ onSaved }: LogProps) {
               placeholder="F.eks. hvordan føltes økten?"
               value={draft.note ?? ''}
               onChange={(e) => setDraft({ ...draft, note: e.target.value })}
-              className="w-full rounded-xl border border-white/15 bg-viking-blue-deep px-4 py-2.5 text-sm text-viking-white outline-none placeholder:text-viking-white/35 focus:border-viking-gold"
+              className="w-full rounded-xl border border-app-border/20 bg-app-surface-deep px-4 py-2.5 text-sm text-app-text outline-none placeholder:text-app-text/35 focus:border-app-gold"
             />
           </div>
 
           {savedMsg && (
-            <p className="mb-3 text-center text-sm font-medium text-viking-gold">{savedMsg}</p>
+            <p className="mb-3 text-center text-sm font-medium text-app-gold">{savedMsg}</p>
           )}
 
           <div className="flex gap-2">
@@ -387,11 +433,11 @@ export default function Log({ onSaved }: LogProps) {
             {editing && (
               <>
                 {confirmDelete ? (
-                  <button onClick={remove} className="btn-ghost border-[#E05A66]/50 text-[#E05A66]">
+                  <button onClick={remove} className="btn-ghost border-app-pain-soft/50 text-app-pain-soft">
                     Bekreft sletting
                   </button>
                 ) : (
-                  <button onClick={() => setConfirmDelete(true)} className="btn-ghost text-[#E05A66]">
+                  <button onClick={() => setConfirmDelete(true)} className="btn-ghost text-app-pain-soft">
                     Slett
                   </button>
                 )}
@@ -399,7 +445,7 @@ export default function Log({ onSaved }: LogProps) {
             )}
           </div>
           {editing && draft.updatedAt && (
-            <p className="mt-3 text-center text-[11px] text-viking-white/40">
+            <p className="mt-3 text-center text-[11px] text-app-text/40">
               Sist endret {new Date(draft.updatedAt).toLocaleString('nb-NO')}
             </p>
           )}

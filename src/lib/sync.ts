@@ -7,10 +7,23 @@ import {
   markSynced,
   hardDeleteEntry,
   addConflict,
-  getSyncMeta
+  getSyncMeta,
+  getDirtyCategories,
+  markCategorySynced,
+  getCategoryRow
 } from './db';
-import { entryToRow, rowToEntry, sameDayContent, type DayEntryRow } from './supabaseTypes';
-import type { DayEntry } from './types';
+import {
+  entryToRow,
+  rowToEntry,
+  sameDayContent,
+  categoryToRow,
+  rowToCategory,
+  sameCategoryContent,
+  type DayEntryRow,
+  type CategoryRow
+} from './supabaseTypes';
+import { migrateLegacyActivityKeys } from './migrations';
+import type { Category, DayEntry } from './types';
 import { kvGet, kvSet } from './db';
 
 /**
@@ -22,6 +35,8 @@ import { kvGet, kvSet } from './db';
  *
  * Konfliktregel: sist-skrevet-vinner (updated_at). Taperen arkiveres
  * i conflicts-tabellen og kan inspiseres/gjenopprettes manuelt.
+ *
+ * Kategorier synkroniseres på samme måte (egen tabell), med samme regel.
  */
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline';
@@ -46,7 +61,7 @@ class SyncManager {
 
   async init(): Promise<void> {
     this.state.lastSyncAt = await kvGet<string | null>(LAST_SYNC_KEY, null);
-    this.state.pendingPush = (await getDirtySyncMeta()).length;
+    this.state.pendingPush = await this.countPending();
     window.addEventListener('online', this.onlineHandler);
     this.subscribeRealtime();
   }
@@ -74,6 +89,23 @@ class SyncManager {
     for (const l of this.listeners) l(this.getState());
   }
 
+  private async countPending(): Promise<number> {
+    const days = (await getDirtySyncMeta()).length;
+    const cats = (await getDirtyCategories()).length;
+    return days + cats;
+  }
+
+  /** Kjører én-gangs migrering av gamle aktivitetsnøkler (sonelag → akademi). */
+  async runMigrations(): Promise<void> {
+    const changed = await migrateLegacyActivityKeys(getAllEntries, async (entry) => {
+      await db.days.put({ ...entry, id: entry.date });
+      await db.syncMeta.put({ date: entry.date, syncedAt: '', dirty: true, deleted: false });
+    });
+    if (changed > 0) {
+      this.setState({ pendingPush: await this.countPending() });
+    }
+  }
+
   /** Hovedinngang: kjør full synk (push + pull). Kalles ved innlogging, nettilkobling, og etter hver lagring. */
   async sync(): Promise<void> {
     if (this.syncing) return;
@@ -88,17 +120,19 @@ class SyncManager {
     try {
       await this.push(userId);
       await this.pull(userId);
+      await this.pushCategories(userId);
+      await this.pullCategories(userId);
       await kvSet(LAST_SYNC_KEY, new Date().toISOString());
       this.setState({
         status: 'idle',
         lastSyncAt: new Date().toISOString(),
-        pendingPush: (await getDirtySyncMeta()).length
+        pendingPush: await this.countPending()
       });
     } catch (e) {
       this.setState({
         status: 'error',
         lastError: e instanceof Error ? e.message : 'Ukjent synkfeil',
-        pendingPush: (await getDirtySyncMeta()).length
+        pendingPush: await this.countPending()
       });
     } finally {
       this.syncing = false;
@@ -211,6 +245,46 @@ class SyncManager {
     }
   }
 
+  /** Push dirty kategorier til skyen. */
+  private async pushCategories(userId: string): Promise<void> {
+    const dirty = await getDirtyCategories();
+    for (const cat of dirty) {
+      const row = categoryToRow(cat, userId);
+      const { error } = await supabase
+        .from('categories')
+        .upsert(row, { onConflict: 'user_id,kind,key' });
+      if (error) throw new Error(`Push kategori feilet (${cat.kind}/${cat.key}): ${error.message}`);
+      await markCategorySynced(cat.kind, cat.key);
+    }
+  }
+
+  /** Pull kategorier fra skyen (sist-skrevet-vinner per (kind,key)). */
+  private async pullCategories(userId: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', userId);
+    if (error) throw new Error(`Pull kategorier feilet: ${error.message}`);
+    if (!data) return;
+
+    for (const raw of data as CategoryRow[]) {
+      const cloudCat = rowToCategory(raw);
+      const local = await getCategoryRow(raw.kind, raw.key);
+      if (!local) {
+        await db.categories.add({ ...cloudCat, dirty: false });
+        continue;
+      }
+      if (local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
+        continue; // lokal endring vinner, pushes neste runde
+      }
+      if (new Date(raw.updated_at) >= new Date(local.updatedAt) && !sameCategoryContent(local, cloudCat)) {
+        if (local.id !== undefined) {
+          await db.categories.put({ ...cloudCat, id: local.id, dirty: false }, local.id);
+        }
+      }
+    }
+  }
+
   /** Full nedlasting fra skyen (første innlogging på ny enhet). Overskriver ikke dirty lokale rader. */
   async fullDownload(): Promise<{ imported: number; skipped: number }> {
     const userId = await getUserId();
@@ -235,7 +309,8 @@ class SyncManager {
       await markSynced(raw.date, false);
       imported++;
     }
-    this.setState({ pendingPush: (await getDirtySyncMeta()).length });
+    await this.pullCategories(userId);
+    this.setState({ pendingPush: await this.countPending() });
     return { imported, skipped };
   }
 
@@ -246,7 +321,7 @@ class SyncManager {
   }
 
   /** Eksporter alle rader fra skyen (for backup/deling). */
-  async exportCloudData(): Promise<DayEntry[]> {
+  async exportCloudData(): Promise<{ entries: DayEntry[]; categories: Category[] }> {
     const userId = await getUserId();
     if (!userId) throw new Error('Ikke logget inn');
     const { data, error } = await supabase
@@ -256,16 +331,31 @@ class SyncManager {
       .eq('deleted', false)
       .order('date', { ascending: true });
     if (error) throw new Error(`Eksport feilet: ${error.message}`);
-    return ((data ?? []) as DayEntryRow[]).map((r) => rowToEntry({ ...r, pains: r.pains ?? [] }));
+    const { data: catData, error: catError } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('user_id', userId);
+    if (catError) throw new Error(`Eksport kategorier feilet: ${catError.message}`);
+    return {
+      entries: ((data ?? []) as DayEntryRow[]).map((r) => rowToEntry({ ...r, pains: r.pains ?? [] })),
+      categories: ((catData ?? []) as CategoryRow[]).map(rowToCategory)
+    };
   }
 
   /** Realtime: når en annen enhet endrer data, hent ned umiddelbart. */
   private subscribeRealtime(): void {
     this.realtimeChannel = supabase
-      .channel('belast-day-entries')
+      .channel('belast-sync')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'day_entries' },
+        () => {
+          void this.sync();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories' },
         () => {
           void this.sync();
         }

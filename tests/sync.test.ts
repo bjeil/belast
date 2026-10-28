@@ -4,9 +4,13 @@ import {
   rowToEntry,
   sameDayContent,
   parsePains,
-  type DayEntryRow
+  categoryToRow,
+  rowToCategory,
+  sameCategoryContent,
+  type DayEntryRow,
+  type CategoryRow
 } from '../src/lib/supabaseTypes';
-import type { DayEntry } from '../src/lib/types';
+import type { Category, DayEntry } from '../src/lib/types';
 
 const USER_ID = 'test-user-uuid';
 
@@ -14,7 +18,7 @@ function makeEntry(overrides: Partial<DayEntry> = {}): DayEntry {
   return {
     id: '2026-01-15',
     date: '2026-01-15',
-    activities: ['trening_sonelag'],
+    activities: ['trening_akademi'],
     load: 7,
     durationMin: 90,
     pains: [{ bodyPart: 'kne', level: 3, note: 'Litt støl' }],
@@ -85,6 +89,47 @@ describe('sameDayContent', () => {
     const a = makeEntry({ updatedAt: '2026-01-15T10:00:00.000Z' });
     const b = makeEntry({ updatedAt: '2026-01-16T10:00:00.000Z', id: 'annen-id' });
     expect(sameDayContent(a, b)).toBe(true);
+  });
+});
+
+describe('categoryToRow / rowToCategory roundtrip', () => {
+  const cat: Category = {
+    kind: 'activity',
+    key: 'kamp_akademi',
+    label: 'Kamp – akademi',
+    sortOrder: 10,
+    active: true,
+    updatedAt: '2026-01-15T20:00:00.000Z'
+  };
+
+  it('konverterer kategori til rad og tilbake uten tap av data', () => {
+    const row = categoryToRow(cat, USER_ID);
+    expect(row.user_id).toBe(USER_ID);
+    expect(row.kind).toBe('activity');
+    expect(row.key).toBe('kamp_akademi');
+
+    const fullRow: CategoryRow = { id: 'some-uuid', ...row };
+    const back = rowToCategory(fullRow);
+    expect(back).toMatchObject({
+      userId: USER_ID,
+      kind: 'activity',
+      key: 'kamp_akademi',
+      label: 'Kamp – akademi',
+      sortOrder: 10,
+      active: true
+    });
+  });
+
+  it('sameCategoryContent ignorerer tidsstempel og bruker-id', () => {
+    const a = { ...cat, updatedAt: '2026-01-15T10:00:00.000Z', userId: 'annet' };
+    const b = { ...cat, updatedAt: '2026-01-16T10:00:00.000Z' };
+    expect(sameCategoryContent(a, b)).toBe(true);
+  });
+
+  it('sameCategoryContent er false når etikett eller status er forskjellig', () => {
+    expect(sameCategoryContent(cat, { ...cat, label: 'Kamp – A-lag' })).toBe(false);
+    expect(sameCategoryContent(cat, { ...cat, active: false })).toBe(false);
+    expect(sameCategoryContent(cat, { ...cat, sortOrder: 99 })).toBe(false);
   });
 });
 

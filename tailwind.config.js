@@ -1,4 +1,9 @@
 /** @type {import('tailwindcss').Config} */
+
+// Farger som CSS-variabler (definert i src/index.css) slik at lyst/mørkt tema
+// kan byttes uten å endre komponenter. <alpha-value> lar oss bruke /opacity.
+const withAlpha = (v) => `rgb(var(${v}) / <alpha-value>)`;
+
 export default {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -12,7 +17,25 @@ export default {
           gold: '#DBC067',
           red: '#72121C',
           white: '#FFFFFF'
-        }
+        },
+        app: {
+          bg: withAlpha('--app-bg'),
+          surface: withAlpha('--app-surface'),
+          'surface-deep': withAlpha('--app-surface-deep'),
+          'surface-2': withAlpha('--app-surface-2'),
+          text: withAlpha('--app-text'),
+          border: withAlpha('--app-border'),
+          hover: withAlpha('--app-hover'),
+          gold: withAlpha('--app-gold'),
+          'pain-soft': 'var(--app-pain-soft)',
+          'pain-light': 'var(--app-pain-light)'
+        },
+        load: {
+          low: withAlpha('--load-low'),
+          mid: withAlpha('--load-mid'),
+          high: withAlpha('--load-high')
+        },
+        rest: withAlpha('--rest')
       },
       fontFamily: {
         display: ['"Archivo Black"', 'Arial Black', 'sans-serif'],

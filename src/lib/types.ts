@@ -1,45 +1,29 @@
-export type ActivityType =
-  | 'kamp_sonelag'
-  | 'trening_sonelag'
-  | 'kamp_hana'
-  | 'trening_hana'
-  | 'egentrening'
-  | 'hviledag'
-  | 'annet';
+/**
+ * Aktivitetstyper og kroppsdeler lagres som fritekst-nøkler (string) i loggen.
+ * Etikettene og hvilke valg som finnes styres av brukerens kategorier
+ * (se lib/categories.ts og tabellen `categories` i Supabase).
+ */
 
-export const ACTIVITY_TYPES: ActivityType[] = [
-  'kamp_sonelag',
-  'trening_sonelag',
-  'kamp_hana',
-  'trening_hana',
-  'egentrening',
-  'hviledag',
-  'annet'
-];
+export type ActivityType = string;
+export type BodyPart = string;
 
-export const ACTIVITY_LABELS: Record<ActivityType, string> = {
-  kamp_sonelag: 'Kamp – sonelag',
-  trening_sonelag: 'Trening – sonelag',
-  kamp_hana: 'Kamp – Hana',
-  trening_hana: 'Trening – Hana',
-  egentrening: 'Egentrening',
-  hviledag: 'Hviledag',
-  annet: 'Annet'
-};
+/** Nøkkel for innebygd systemkategori: hviledag (kan ikke fjernes). */
+export const REST_DAY = 'hviledag';
+export const REST_DAY_LABEL = 'Hviledag';
 
-export type BodyPart = 'rygg' | 'hofte' | 'lar' | 'kne' | 'legg' | 'fot' | 'annet';
+export type CategoryKind = 'activity' | 'body_part';
 
-export const BODY_PARTS: BodyPart[] = ['rygg', 'hofte', 'lar', 'kne', 'legg', 'fot', 'annet'];
-
-export const BODY_PART_LABELS: Record<BodyPart, string> = {
-  rygg: 'Rygg',
-  hofte: 'Hofte',
-  lar: 'Lår',
-  kne: 'Kne',
-  legg: 'Legg',
-  fot: 'Fot',
-  annet: 'Annet'
-};
+export interface Category {
+  id?: number; // lokal Dexie-id (auto)
+  userId?: string; // settes ved synk
+  kind: CategoryKind;
+  key: string; // stabil nøkkel brukt i loggen, f.eks. "kamp_akademi"
+  label: string; // visningsnavn, f.eks. "Kamp – akademi"
+  sortOrder: number;
+  active: boolean; // false = "utdatert"/fjernet — beholdes for historikk
+  dirty?: boolean; // lokal endring ikke ennå pushet til skyen
+  updatedAt: string; // ISO — sist-skrevet-vinner ved synk
+}
 
 export interface PainEntry {
   bodyPart: BodyPart;
@@ -56,12 +40,6 @@ export interface DayEntry {
   pains: PainEntry[];
   note?: string;
   updatedAt: string; // ISO-tidsstempel
-}
-
-export interface Profile {
-  playerName: string;
-  birthYear?: number;
-  team: string; // f.eks. "Sonelag" / "Hana"
 }
 
 export interface AppSettings {

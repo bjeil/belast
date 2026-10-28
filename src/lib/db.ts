@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { DayEntry, Profile, AppSettings } from './types';
+import type { Category, DayEntry, AppSettings } from './types';
 
 export interface KeyValueRow {
   key: string;
@@ -29,6 +29,7 @@ class TrainingDB extends Dexie {
   kv!: Table<KeyValueRow, string>;
   syncMeta!: Table<SyncMetaRow, string>;
   conflicts!: Table<ConflictRow, number>;
+  categories!: Table<Category, number>;
 
   constructor() {
     super('belast');
@@ -37,6 +38,9 @@ class TrainingDB extends Dexie {
       kv: 'key',
       syncMeta: 'date, syncedAt, dirty',
       conflicts: '++id, date, detectedAt'
+    });
+    this.version(3).stores({
+      categories: '++id, kind, key, & [kind+key]'
     });
   }
 }
@@ -97,14 +101,6 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
   await db.kv.put({ key, value });
 }
 
-export async function getProfile(): Promise<Profile> {
-  return kvGet<Profile>('profile', { playerName: '', team: '' });
-}
-
-export async function saveProfile(profile: Profile): Promise<void> {
-  await kvSet('profile', profile);
-}
-
 export async function getSettings(): Promise<AppSettings> {
   return kvGet<AppSettings>('settings', { theme: 'dark' });
 }
@@ -124,4 +120,52 @@ export async function getConflicts(): Promise<ConflictRow[]> {
 
 export async function clearConflicts(): Promise<void> {
   await db.conflicts.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Kategorier (dimensjonstabell — også synkronisert til Supabase)
+// ---------------------------------------------------------------------------
+
+/** Hent alle kategorier (inkl. inaktive) sortert etter sortOrder. */
+export async function getAllCategoryRows(): Promise<Category[]> {
+  const rows = await db.categories.toArray();
+  return rows.sort((a, b) => a.kind.localeCompare(b.kind) || a.sortOrder - b.sortOrder);
+}
+
+/** Hent én kategori på (kind, key). */
+export async function getCategoryRow(kind: string, key: string): Promise<Category | undefined> {
+  return db.categories.where('[kind+key]').equals([kind, key]).first();
+}
+
+/** Opprett eller oppdater kategori lokalt og merk den dirty for synk. */
+export async function saveCategoryRow(category: Category): Promise<void> {
+  const existing = await getCategoryRow(category.kind, category.key);
+  const row: Category = {
+    ...category,
+    id: existing?.id,
+    dirty: true,
+    updatedAt: new Date().toISOString()
+  };
+  if (existing?.id !== undefined) {
+    await db.categories.put(row, existing.id);
+  } else {
+    await db.categories.add(row);
+  }
+}
+
+/** Hent alle dirty kategorier (ikke-synkede endringer). */
+export async function getDirtyCategories(): Promise<Category[]> {
+  return db.categories.filter((c) => !!c.dirty).toArray();
+}
+
+/** Merk kategori som synkronisert (kalles etter vellykket push). */
+export async function markCategorySynced(kind: string, key: string, patch: Partial<Category> = {}): Promise<void> {
+  const existing = await getCategoryRow(kind, key);
+  if (!existing || existing.id === undefined) return;
+  await db.categories.put({ ...existing, ...patch, dirty: false }, existing.id);
+}
+
+/** Slett alle kategorier lokalt (ved «slett alle data»). */
+export async function clearAllCategories(): Promise<void> {
+  await db.categories.clear();
 }

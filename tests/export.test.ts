@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { DayEntry } from '../src/lib/types';
+import type { Category, DayEntry } from '../src/lib/types';
 import { buildBackup, parseBackup } from '../src/lib/export';
+
+const categories: Category[] = [
+  { kind: 'activity', key: 'kamp_akademi', label: 'Kamp – akademi', sortOrder: 10, active: true, updatedAt: '2025-01-01T00:00:00.000Z' }
+];
 
 const entries: DayEntry[] = [
   {
     id: '2025-06-10',
     date: '2025-06-10',
-    activities: ['kamp_sonelag', 'egentrening'],
+    activities: ['kamp_akademi', 'egentrening'],
     load: 8,
     durationMin: 90,
     pains: [{ bodyPart: 'kne', level: 6, note: 'Vondt etter kamp' }],
@@ -24,13 +28,26 @@ const entries: DayEntry[] = [
 ];
 
 describe('backup roundtrip', () => {
-  it('bygger og parser backup uten tap av data', () => {
-    const profile = { playerName: 'Ola', birthYear: 2012, team: 'G13' };
-    const backup = buildBackup(profile, entries);
+  it('bygger og parser backup (v2) uten tap av data', () => {
+    const backup = buildBackup(entries, categories);
     const parsed = parseBackup(JSON.stringify(backup));
     expect(parsed.format).toBe('belast-backup');
-    expect(parsed.profile).toEqual(profile);
+    expect(parsed.version).toBe(2);
+    expect(parsed.categories).toEqual(categories);
     expect(parsed.entries).toEqual(entries);
+  });
+
+  it('aksepterer fortsatt gamle v1-backups (uten kategorier)', () => {
+    const v1 = {
+      format: 'belast-backup',
+      version: 1,
+      exportedAt: '2025-06-10T00:00:00.000Z',
+      profile: { playerName: 'Ola', team: 'G13' },
+      entries
+    };
+    const parsed = parseBackup(JSON.stringify(v1));
+    expect(parsed.entries).toEqual(entries);
+    expect(parsed.categories).toBeUndefined();
   });
 
   it('avviser ugyldige filer', () => {

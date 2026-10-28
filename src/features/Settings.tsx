@@ -1,28 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Profile } from '../lib/types';
 import {
   clearAllEntries,
   getAllEntries,
-  getProfile,
   getSettings,
-  saveProfile,
   saveSettings,
   getConflicts,
   clearConflicts,
+  clearAllCategories,
+  saveCategoryRow,
   type ConflictRow
 } from '../lib/db';
+import { getAllCategories, seedDefaultCategories } from '../lib/categories';
 import { exportBackup, exportCsv, parseBackup } from '../lib/export';
 import { syncManager, type SyncState } from '../lib/sync';
 import { saveEntry } from '../lib/db';
 import { Card, CardTitle } from '../components/ui';
+import CategoriesEditor from './CategoriesEditor';
 
 interface SettingsProps {
-  onProfileChanged: () => void;
   onThemeChanged: () => void;
 }
 
-export default function Settings({ onProfileChanged, onThemeChanged }: SettingsProps) {
-  const [profile, setProfile] = useState<Profile>({ playerName: '', birthYear: undefined, team: '' });
+export default function Settings({ onThemeChanged }: SettingsProps) {
   const [msg, setMsg] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [entryCount, setEntryCount] = useState(0);
@@ -34,7 +33,6 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = async () => {
-    setProfile(await getProfile());
     setEntryCount((await getAllEntries()).length);
     setTheme((await getSettings()).theme);
     setConflicts(await getConflicts());
@@ -51,12 +49,6 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
     setTimeout(() => setMsg(''), 3500);
   };
 
-  const save = async () => {
-    await saveProfile(profile);
-    onProfileChanged();
-    flash('Profil lagret ✔');
-  };
-
   const toggleTheme = async () => {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
@@ -66,21 +58,23 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
 
   const doExportBackup = async () => {
     const entries = await getAllEntries();
-    exportBackup(await getProfile(), entries);
+    const categories = await getAllCategories();
+    exportBackup(entries, categories);
     flash('Backup lastet ned ✔');
   };
 
   const doExportCsv = async () => {
     const entries = await getAllEntries();
-    exportCsv(entries);
+    const categories = await getAllCategories();
+    exportCsv(entries, categories);
     flash('CSV lastet ned ✔');
   };
 
   const doExportCloud = async () => {
     setBusy(true);
     try {
-      const entries = await syncManager.exportCloudData();
-      exportBackup(await getProfile(), entries);
+      const { entries, categories } = await syncManager.exportCloudData();
+      exportBackup(entries, categories);
       flash(`Eksportert ${entries.length} dager fra skyen ✔`);
     } catch (e) {
       flash(e instanceof Error ? e.message : 'Eksport fra sky feilet');
@@ -97,9 +91,12 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
       for (const entry of backup.entries) {
         await saveEntry(entry);
       }
-      if (backup.profile) {
-        await saveProfile(backup.profile);
-        onProfileChanged();
+      if (backup.categories && backup.categories.length > 0) {
+        // Importer kategorier fra backup (versjon 2)
+        await seedDefaultCategories();
+        for (const c of backup.categories) {
+          await saveCategoryRow({ ...c, dirty: true });
+        }
       }
       await refresh();
       void syncManager.sync();
@@ -129,6 +126,8 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
 
   const wipeLocal = async () => {
     await clearAllEntries();
+    await clearAllCategories();
+    await seedDefaultCategories();
     await refresh();
     setConfirmWipe(false);
     flash('Alle lokale data er slettet');
@@ -139,6 +138,8 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
     try {
       await syncManager.deleteAllCloudData();
       await clearAllEntries();
+      await clearAllCategories();
+      await seedDefaultCategories();
       await refresh();
       setConfirmCloudWipe(false);
       flash('Alle data slettet — lokalt og i skyen');
@@ -154,65 +155,13 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardTitle>Spillerprofil</CardTitle>
-        <div className="space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-viking-white/60">
-              Navn
-            </label>
-            <input
-              type="text"
-              value={profile.playerName}
-              onChange={(e) => setProfile({ ...profile, playerName: e.target.value })}
-              placeholder="Fornavn"
-              className="w-full rounded-xl border border-white/15 bg-viking-blue-deep px-4 py-2.5 text-viking-white outline-none focus:border-viking-gold"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-viking-white/60">
-                Fødselsår
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={2000}
-                max={2030}
-                value={profile.birthYear ?? ''}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    birthYear: e.target.value === '' ? undefined : Number(e.target.value)
-                  })
-                }
-                className="w-full rounded-xl border border-white/15 bg-viking-blue-deep px-4 py-2.5 text-viking-white outline-none focus:border-viking-gold"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-viking-white/60">
-                Lag
-              </label>
-              <input
-                type="text"
-                value={profile.team}
-                onChange={(e) => setProfile({ ...profile, team: e.target.value })}
-                placeholder="F.eks. G13 sonelag"
-                className="w-full rounded-xl border border-white/15 bg-viking-blue-deep px-4 py-2.5 text-viking-white outline-none focus:border-viking-gold"
-              />
-            </div>
-          </div>
-          <button onClick={save} className="btn-primary">
-            Lagre profil
-          </button>
-        </div>
-      </Card>
+      <CategoriesEditor />
 
       <Card>
         <CardTitle>Synkronisering (sky)</CardTitle>
-        <div className="space-y-2 text-sm text-viking-white/70">
+        <div className="space-y-2 text-sm text-app-text/70">
           <p>
-            Status: <strong className="text-viking-gold">
+            Status: <strong className="text-app-gold">
               {syncState.status === 'idle' && syncState.pendingPush === 0 && 'Synkronisert ✔'}
               {syncState.status === 'syncing' && 'Synkroniserer …'}
               {syncState.status === 'error' && 'Feil — se under'}
@@ -222,7 +171,7 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
           </p>
           <p>Sist synkronisert: {lastSyncText}</p>
           {syncState.lastError && (
-            <p className="text-[#E05A66]">Feil: {syncState.lastError}</p>
+            <p className="text-app-pain-soft">Feil: {syncState.lastError}</p>
           )}
         </div>
         <div className="mt-3 space-y-2">
@@ -233,7 +182,7 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
             ⬇️ Last ned alle data fra skyen
           </button>
         </div>
-        <p className="mt-3 text-xs text-viking-white/50">
+        <p className="mt-3 text-xs text-app-text/50">
           Appen fungerer offline. Endringer lagres lokalt først og synkroniseres automatisk
           når nettet er tilbake — også når den andre enheten gjør endringer.
         </p>
@@ -241,16 +190,16 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
 
       {conflicts.length > 0 && (
         <Card>
-          <CardTitle className="text-amber-400">Synkroniseringskonflikter ({conflicts.length})</CardTitle>
-          <p className="mb-2 text-xs text-viking-white/60">
+          <CardTitle className="text-amber-500 dark:text-amber-400">Synkroniseringskonflikter ({conflicts.length})</CardTitle>
+          <p className="mb-2 text-xs text-app-text/60">
             Samme dag ble endret på to enheter samtidig. Nyeste versjon vant;
             den andre er arkivert her.
           </p>
           <div className="max-h-48 space-y-2 overflow-y-auto">
             {conflicts.map((c) => (
-              <div key={c.id} className="rounded-lg border border-amber-400/30 bg-viking-blue-deep/60 p-2 text-xs">
-                <p className="font-semibold text-viking-gold">{c.date}</p>
-                <p className="text-viking-white/60">
+              <div key={c.id} className="rounded-lg border border-amber-400/30 bg-app-surface-deep/60 p-2 text-xs">
+                <p className="font-semibold text-app-gold">{c.date}</p>
+                <p className="text-app-text/60">
                   Vinner: {c.resolution === 'cloud' ? 'sky' : 'lokal'} · belastning {c.cloudEntry.load} (sky) / {c.localEntry.load} (lokal)
                 </p>
               </div>
@@ -271,15 +220,15 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
 
       <Card>
         <CardTitle>Data og sikkerhetskopi</CardTitle>
-        <p className="mb-3 text-sm text-viking-white/65">
+        <p className="mb-3 text-sm text-app-text/65">
           {entryCount} dager lokalt. Last ned backup jevnlig – spesielt før du bytter telefon.
         </p>
         <div className="space-y-2">
           <button onClick={doExportBackup} className="btn-primary w-full">
-            ⬇️ Last ned backup (JSON, lokalt)
+            ⬆️ Last ned backup (JSON, lokalt)
           </button>
           <button onClick={doExportCsv} className="btn-ghost w-full">
-            ⬇️ Eksporter til CSV (Excel)
+            ⬆️ Eksporter til CSV (Excel)
           </button>
           <button onClick={doExportCloud} className="btn-ghost w-full" disabled={busy}>
             ☁️ Eksporter alle data fra skyen (JSON)
@@ -295,22 +244,22 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
             onChange={doImport}
           />
         </div>
-        <p className="mt-3 text-xs text-viking-white/50">
+        <p className="mt-3 text-xs text-app-text/50">
           CSV-filen kan deles med trener, fysioterapeut eller åpnes i Excel/Numbers/Google Sheets.
           JSON-backup brukes for å gjenopprette data på denne eller en annen enhet.
         </p>
       </Card>
 
       <Card>
-        <CardTitle className="text-[#E05A66]">Faresone</CardTitle>
+        <CardTitle className="text-app-pain-soft">Faresone</CardTitle>
         {confirmWipe ? (
           <div className="space-y-2">
-            <p className="text-sm text-viking-white/75">
+            <p className="text-sm text-app-text/75">
               Sletter <strong>lokale</strong> data på denne enheten. Data i skyen beholdes
               (lastes ned igjen ved neste synk).
             </p>
             <div className="flex gap-2">
-              <button onClick={wipeLocal} className="btn-ghost flex-1 border-[#E05A66]/60 text-[#E05A66]">
+              <button onClick={wipeLocal} className="btn-ghost flex-1 border-app-pain-soft/60 text-app-pain-soft">
                 Ja, slett lokalt
               </button>
               <button onClick={() => setConfirmWipe(false)} className="btn-ghost flex-1">
@@ -320,12 +269,12 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
           </div>
         ) : confirmCloudWipe ? (
           <div className="space-y-2">
-            <p className="text-sm text-viking-white/75">
+            <p className="text-sm text-app-text/75">
               Dette sletter <strong>alle data permanent</strong> — både lokalt på denne enheten
               OG i skyen (alle enheter). Kan ikke angres. Ta backup først!
             </p>
             <div className="flex gap-2">
-              <button onClick={wipeCloud} className="btn-ghost flex-1 border-[#E05A66]/60 text-[#E05A66]" disabled={busy}>
+              <button onClick={wipeCloud} className="btn-ghost flex-1 border-app-pain-soft/60 text-app-pain-soft" disabled={busy}>
                 Ja, slett alt overalt
               </button>
               <button onClick={() => setConfirmCloudWipe(false)} className="btn-ghost flex-1">
@@ -337,13 +286,13 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
           <div className="space-y-2">
             <button
               onClick={() => setConfirmWipe(true)}
-              className="btn-ghost w-full border-[#E05A66]/40 text-[#E05A66]"
+              className="btn-ghost w-full border-app-pain-soft/40 text-app-pain-soft"
             >
               🗑️ Slett lokale data (denne enheten)
             </button>
             <button
               onClick={() => setConfirmCloudWipe(true)}
-              className="btn-ghost w-full border-[#E05A66]/60 text-[#E05A66]"
+              className="btn-ghost w-full border-app-pain-soft/60 text-app-pain-soft"
             >
               ☁️🗑️ Slett ALLE data (lokalt + sky)
             </button>
@@ -352,10 +301,10 @@ export default function Settings({ onProfileChanged, onThemeChanged }: SettingsP
       </Card>
 
       {msg && (
-        <p className="pb-2 text-center text-sm font-medium text-viking-gold">{msg}</p>
+        <p className="pb-2 text-center text-sm font-medium text-app-gold">{msg}</p>
       )}
 
-      <p className="pb-2 text-center text-[10px] text-viking-white/30">
+      <p className="pb-2 text-center text-[10px] text-app-text/30">
         Belast · versjon {__BUILD_TIME__.slice(0, 10)}
       </p>
     </div>

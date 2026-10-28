@@ -1,12 +1,12 @@
 import { addDays, differenceInCalendarDays, startOfDay } from 'date-fns';
-import { ACTIVITY_TYPES, type ActivityType, type BodyPart, type DayEntry } from './types';
+import { REST_DAY, type ActivityType, type BodyPart, type DayEntry } from './types';
 import { entriesInWindow, toISODate, windowDays, parseDay } from './dates';
 
 export interface WindowStats {
   days: number; // antall dager i vinduet
   activeDays: number; // dager med registrert økt (ikke hviledag/ingen)
   totalSessions: number; // sum alle aktiviteter (multi-select teller flere)
-  byType: Record<ActivityType, number>;
+  byType: Record<ActivityType, number>; // nøkkel = kategorinøkkel (dynamisk)
   totalLoad: number; // sum belastning over aktive dager
   avgLoad: number; // snitt belastning per aktiv dag
   maxLoad: number;
@@ -21,18 +21,11 @@ export interface WindowStats {
 }
 
 function emptyWindowStats(days: number): WindowStats {
-  const byType = Object.fromEntries(ACTIVITY_TYPES.map((t) => [t, 0])) as Record<ActivityType, number>;
-  const painByBodyPart = Object.fromEntries(
-    ['rygg', 'hofte', 'lar', 'kne', 'legg', 'fot', 'annet'].map((p) => [
-      p,
-      { count: 0, totalLevel: 0, maxLevel: 0 }
-    ])
-  ) as Record<BodyPart, { count: number; totalLevel: number; maxLevel: number }>;
   return {
     days,
     activeDays: 0,
     totalSessions: 0,
-    byType,
+    byType: {},
     totalLoad: 0,
     avgLoad: 0,
     maxLoad: 0,
@@ -41,13 +34,13 @@ function emptyWindowStats(days: number): WindowStats {
     avgPainPerDay: 0,
     daysWithPain: 0,
     highPainDays: 0,
-    painByBodyPart,
+    painByBodyPart: {},
     avgPainPerActiveDay: 0
   };
 }
 
-const isRestDay = (e: DayEntry): boolean =>
-  e.activities.length === 0 || (e.activities.length === 1 && e.activities[0] === 'hviledag');
+export const isRestDay = (e: DayEntry): boolean =>
+  e.activities.length === 0 || (e.activities.length === 1 && e.activities[0] === REST_DAY);
 
 /** Statistikk for et gitt tidsvindu. */
 export function computeWindowStats(
@@ -68,7 +61,7 @@ export function computeWindowStats(
         stats.maxLoad = e.load;
         stats.maxLoadDay = e.date;
       }
-      for (const a of e.activities) stats.byType[a]++;
+      for (const a of e.activities) stats.byType[a] = (stats.byType[a] ?? 0) + 1;
       stats.totalSessions += e.activities.length;
     }
     const dayPain = e.pains.reduce((s, p) => s + p.level, 0);
@@ -78,10 +71,11 @@ export function computeWindowStats(
       if (e.pains.some((p) => p.level >= 6)) stats.highPainDays++;
     }
     for (const p of e.pains) {
-      const agg = stats.painByBodyPart[p.bodyPart];
+      const agg = stats.painByBodyPart[p.bodyPart] ?? { count: 0, totalLevel: 0, maxLevel: 0 };
       agg.count++;
       agg.totalLevel += p.level;
       agg.maxLevel = Math.max(agg.maxLevel, p.level);
+      stats.painByBodyPart[p.bodyPart] = agg;
     }
   }
 
@@ -141,22 +135,30 @@ export const ACWR_ZONE_LABELS: Record<AcwrZone, string> = {
   danger: 'Rød sone (>1,5)'
 };
 
-/** Daglig serie for trendlinje: dato + belastning (0 på hviledager/ikke registrert). */
+export interface DailyPoint {
+  date: string;
+  load: number;
+  pain: number;
+  durationMin: number; // treningstid i minutter (0 på hvile/ikke registrert)
+}
+
+/** Daglig serie for trendlinje: dato + belastning + smerte + varighet. */
 export function dailyLoadSeries(
   entries: DayEntry[],
   days: number,
   now: Date = new Date()
-): { date: string; load: number; pain: number }[] {
+): DailyPoint[] {
   const byDate = new Map(entries.map((e) => [e.date, e]));
   const today = startOfDay(now);
-  const series: { date: string; load: number; pain: number }[] = [];
+  const series: DailyPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const iso = toISODate(addDays(today, -i));
     const e = byDate.get(iso);
     series.push({
       date: iso,
       load: e && !isRestDay(e) ? e.load : 0,
-      pain: e ? e.pains.reduce((s, p) => s + p.level, 0) : 0
+      pain: e ? e.pains.reduce((s, p) => s + p.level, 0) : 0,
+      durationMin: e && !isRestDay(e) ? e.durationMin ?? 0 : 0
     });
   }
   return series;
@@ -167,13 +169,13 @@ export function weeklyLoadSeries(
   entries: DayEntry[],
   weeks: number,
   now: Date = new Date()
-): { weekStart: string; totalLoad: number; sessions: number }[] {
+): { weekStart: string; totalLoad: number; sessions: number; totalDurationMin: number }[] {
   const today = startOfDay(now);
   const start = addDays(today, -((weeks - 1) * 7));
   const firstMonday = addDays(start, -((start.getDay() + 6) % 7));
-  const buckets = new Map<string, { totalLoad: number; sessions: number }>();
+  const buckets = new Map<string, { totalLoad: number; sessions: number; totalDurationMin: number }>();
   for (let i = 0; i < weeks; i++) {
-    buckets.set(toISODate(addDays(firstMonday, i * 7)), { totalLoad: 0, sessions: 0 });
+    buckets.set(toISODate(addDays(firstMonday, i * 7)), { totalLoad: 0, sessions: 0, totalDurationMin: 0 });
   }
   for (const e of entries) {
     const d = parseDay(e.date);
@@ -184,6 +186,7 @@ export function weeklyLoadSeries(
     if (b) {
       b.totalLoad += e.load;
       b.sessions += e.activities.length;
+      b.totalDurationMin += e.durationMin ?? 0;
     }
   }
   return Array.from(buckets.entries())
