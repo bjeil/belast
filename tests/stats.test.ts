@@ -20,7 +20,7 @@ function entry(date: string, partial: Partial<DayEntry> = {}): DayEntry {
   return {
     id: date,
     date,
-    activities: ['trening_sonelag'],
+    activities: ['trening_akademi'],
     load: 5,
     durationMin: 60,
     pains: [],
@@ -48,7 +48,7 @@ describe('windowDays / entriesInWindow', () => {
 
 describe('computeWindowStats', () => {
   const entries = [
-    entry(iso(0), { activities: ['kamp_sonelag'], load: 8, pains: [{ bodyPart: 'kne', level: 7 }] }),
+    entry(iso(0), { activities: ['kamp_akademi'], load: 8, pains: [{ bodyPart: 'kne', level: 7 }] }),
     entry(iso(1), { activities: ['trening_hana'], load: 4 }),
     entry(iso(2), { activities: ['hviledag'], load: 1 }),
     entry(iso(10), { activities: ['egentrening'], load: 6, pains: [{ bodyPart: 'rygg', level: 3 }] })
@@ -76,11 +76,22 @@ describe('computeWindowStats', () => {
 
   it('splitter økter per type (hviledag er ikke en økt)', () => {
     const s = computeWindowStats(entries, 30, NOW);
-    expect(s.byType.kamp_sonelag).toBe(1);
-    expect(s.byType.trening_hana).toBe(1);
-    expect(s.byType.egentrening).toBe(1);
-    expect(s.byType.hviledag).toBe(0);
+    expect(s.byType['kamp_akademi']).toBe(1);
+    expect(s.byType['trening_hana']).toBe(1);
+    expect(s.byType['egentrening']).toBe(1);
+    expect(s.byType['hviledag'] ?? 0).toBe(0);
     expect(s.totalSessions).toBe(3);
+  });
+
+  it('håndterer brukerdefinerte kategorinøkler', () => {
+    const s = computeWindowStats(
+      [entry(iso(0), { activities: ['kamp_hana', 'styrketrening'] })],
+      7,
+      NOW
+    );
+    expect(s.byType['kamp_hana']).toBe(1);
+    expect(s.byType['styrketrening']).toBe(1);
+    expect(s.totalSessions).toBe(2);
   });
 
   it('håndterer tom historikk', () => {
@@ -146,12 +157,26 @@ describe('serier', () => {
     expect(series[3].load).toBe(0); // hviledag
   });
 
-  it('weeklyLoadSeries summerer per uke', () => {
-    const entries = [entry(iso(0), { load: 5 }), entry(iso(1), { load: 5 }), entry(iso(9), { load: 4 })];
+  it('dailyLoadSeries inkluderer varighet (treningstid) per dag', () => {
+    const entries = [
+      entry(iso(1), { load: 7, durationMin: 90 }),
+      entry(iso(2), { load: 5, durationMin: undefined }), // ingen varighet
+      entry(iso(3), { activities: ['hviledag'], load: 1, durationMin: 45 })
+    ];
+    const series = dailyLoadSeries(entries, 7, NOW);
+    expect(series[5].durationMin).toBe(90); // i går
+    expect(series[4].durationMin).toBe(0); // i forigårs: ikke ført
+    expect(series[3].durationMin).toBe(0); // hviledag teller ikke
+    expect(series[6].durationMin).toBe(0); // ikke registrert
+  });
+
+  it('weeklyLoadSeries summerer per uke (inkl. varighet)', () => {
+    const entries = [entry(iso(0), { load: 5, durationMin: 60 }), entry(iso(1), { load: 5, durationMin: 30 }), entry(iso(9), { load: 4 })];
     const weeks = weeklyLoadSeries(entries, 4, NOW);
     const thisWeek = weeks[weeks.length - 1];
     expect(thisWeek.totalLoad).toBe(10);
     expect(thisWeek.sessions).toBe(2);
+    expect(thisWeek.totalDurationMin).toBe(90);
   });
 
   it('heatmapData dekker alle dager i vinduet', () => {

@@ -6,23 +6,30 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 ## Hva appen gjør
 
 **Loggføring (med etterregistrering)**
-- Hver dag kan du registrere type trening: kamp/trening med sonelag, kamp/trening
-  med Hana, egentrening, hviledag eller annet (flere kan kombineres per dag)
+- Hver dag kan du registrere type trening (kamp/trening akademi, styrketrening,
+  egentrening, annet – flere kan kombineres per dag) eller hviledag
+- **Kategoriene er brukerstyrte**: legg til, gi nytt navn eller fjern verdier for
+  «type trening» og «smertested» under Innstillinger → Kategorier. Fjernede kategorier
+  beholdes i historikken (vises som «utgått»)
 - Opplevd treningsbelastning 1–10 (slider)
-- Varighet i minutter (valgfritt)
-- Skader/vondter: kroppsdel (rygg, hofte, lår, kne, legg, fot, annet) + smertenivå 1–10 + kommentar
+- Varighet i minutter – med **hurtigtaster for 30/60/90 min** eller fri inntasting
+- Skader/vondter: kroppsdel + smertenivå 1–10 + kommentar
 - Månedskalender med fargekoding – trykk på **hvilken som helst tidligere dag** for å
   etterregistrere eller rette
 
 **Statistikk**
 - Nøkkeltall for 7 / 30 / 90 dager / hele perioden: antall økter (per type),
-  total og snitt belastning, total smerte, dager med smerte
+  total og snitt belastning, **total treningstid**, total smerte, dager med smerte
 - **ACWR** (akutt:kronisk belastningsforhold, 7 vs 28 dager) med grønn/gul/rød sone
-- Trendlinjer for belastning og smerte, søylediagram per uke
+- Trendlinjer for belastning og smerte **samt treningstid (minutter)** per dag,
+  søylediagram per uke
 - Kalender-heatmap over belastning (rød ring = smerte registrert)
 - Smerte per kroppsdel, scatter-plot belastning vs smerte
 - Registreringsstreak og belastningsendring vs forrige periode
 - Smertevarsel ved smerte ≥ 6 flere dager på rad
+
+**Utseende**
+- Mørkt tema (Viking FK) eller **lyst tema** – byttes under Innstillinger → Utseende
 
 **Data, personvern og sky-sync**
 - Data lagres **lokalt** i nettleseren (IndexedDB) – appen fungerer offline
@@ -43,6 +50,10 @@ Innloggingen går via Supabase Auth. Internt mappes brukernavnet `cbl` til
 e-posten `cbl@belast.app` (se `src/lib/supabase.ts`). For å endre passord: gå til
 Supabase Dashboard → Authentication → Users, eller bruk "glemt passord"-flyten
 (når e-postbekreftelse er av).
+
+**Visningsnavn** (valgfritt): sett `player_name` i brukerens `user_metadata`
+i Supabase Dashboard → Authentication → Users → (brukeren) → User Metadata.
+Navnet vises i toppmenyen og på hjem-siden.
 
 ## Supabase-oppsett (gjøres én gang)
 
@@ -72,6 +83,7 @@ Supabase Dashboard → Authentication → Users, eller bruk "glemt passord"-flyt
 - **Konflikter**: ved samtidig redigering av samme dag vinner siste skriver
   (etter `updated_at`); den tapende versjonen arkiveres og vises i Innstillinger
 - **Realtime**: endringer fra andre enheter trigges automatisk via Supabase realtime
+- **Kategorier** synkroniseres på samme måte (egen tabell `categories` i Supabase)
 - Indikator i toppmenyen viser synkroniseringsstatus (synkronisert / synkroniserer /
   feil / offline)
 

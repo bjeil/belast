@@ -2,33 +2,99 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tema-tokens. Mørkt tema er standard. Lyst tema aktiveres ved å sette
+ * class="light" på <html> (se App.tsx) — da overstyrer :root.light alle
+ * variablene, og Tailwind-klassene (app-…, load-…, rest) følger automatisk.
+ */
+:root {
+  --app-bg: 12 24 38;            /* viking-blue-deep #0c1826 */
+  --app-surface: 19 36 54;       /* viking-blue #132436 */
+  --app-surface-deep: 12 24 38;  /* samme som bg (inputs) */
+  --app-surface-2: 29 58 84;     /* viking-blue-light #1d3a54 */
+  --app-text: 255 255 255;
+  --app-border: 255 255 255;     /* brukes med /10, /15, /30 */
+  --app-hover: 255 255 255;      /* brukes med /5, /10 */
+  --app-gold: 219 192 103;       /* viking-gold #DBC067 */
+  --app-pain-soft: 224 90 102;   /* #E05A66 */
+  --app-pain-light: 255 179 186; /* #ffb3ba (varseltekst) */
+
+  /* Belastningsskala (kalender + heatmap) */
+  --load-low: 52 100 140;        /* mørk blå, lav belastning 1-4 */
+  --load-mid: 79 179 232;        /* lys blå/cyan, moderat 5-7 */
+  --load-high: 219 192 103;      /* gull, hard belastning 8-10 */
+  --rest: 100 116 139;           /* nøytral grå, hvile */
+
+  --chart-grid: 255 255 255;
+  --chart-tick: 255 255 255;
+  --chart-tooltip-bg: 29 58 84;
+  --chart-tooltip-border: 255 255 255;
+}
+
+:root.light {
+  --app-bg: 241 245 249;          /* slate-100 */
+  --app-surface: 255 255 255;     /* hvit */
+  --app-surface-deep: 241 245 249; /* slate-100 (inputs) */
+  --app-surface-2: 226 232 240;   /* slate-200 */
+  --app-text: 15 23 42;           /* slate-900 */
+  --app-border: 15 23 42;         /* brukes med /10, /15, /30 */
+  --app-hover: 15 23 42;          /* brukes med /5, /10 */
+  --app-gold: 176 141 46;        /* mørkere gull for kontrast på lys bakgrunn */
+  --app-pain-soft: 194 32 50;    /* mørkere rød for kontrast */
+  --app-pain-light: 153 27 27;   /* rød-800 */
+
+  --load-low: 96 165 250;        /* blue-400 */
+  --load-mid: 14 165 233;        /* sky-500 */
+  --load-high: 202 138 4;        /* amber-600 (gull på lys) */
+  --rest: 148 163 184;           /* slate-400 */
+
+  --chart-grid: 15 23 42;
+  --chart-tick: 51 65 85;
+  --chart-tooltip-bg: 255 255 255;
+  --chart-tooltip-border: 15 23 42;
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-viking-blue-deep text-viking-white font-body antialiased;
+    @apply bg-app-bg text-app-text font-body antialiased;
+    min-height: 100dvh;
+  }
+  html:not(.light) body {
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -10%, rgba(219, 192, 103, 0.08), transparent),
       repeating-linear-gradient(115deg, transparent 0 120px, rgba(255, 255, 255, 0.015) 120px 122px);
-    min-height: 100dvh;
+  }
+  /* Sørg for lesbar tekst i native kontroller (select/option) i lyst tema */
+  html.light select option {
+    color: #0f172a;
+    background: #fff;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-2xl bg-viking-blue/80 border border-white/10 shadow-lg backdrop-blur-sm;
+    @apply rounded-2xl bg-app-surface/90 border border-app-border/15 shadow-lg backdrop-blur-sm;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-xl bg-viking-gold px-5 py-3 font-semibold text-viking-blue-deep
+    @apply inline-flex items-center justify-center rounded-xl bg-app-gold px-5 py-3 font-semibold text-viking-blue-deep
       transition-transform active:scale-95 hover:brightness-110 disabled:opacity-50 disabled:pointer-events-none;
   }
+  .light .btn-primary {
+    @apply text-slate-900;
+  }
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-xl border border-white/15 px-4 py-2.5 font-medium text-viking-white/90
-      transition-colors hover:bg-white/5 active:bg-white/10;
+    @apply inline-flex items-center justify-center rounded-xl border border-app-border/20 px-4 py-2.5 font-medium text-app-text/90
+      transition-colors hover:bg-app-hover/10 active:bg-app-hover/15;
   }
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors;
+  }
+  .input-field {
+    @apply w-full rounded-xl border border-app-border/20 bg-app-surface-deep px-4 py-2.5 text-app-text
+      outline-none placeholder:text-app-text/40 focus:border-app-gold;
   }
   .slider-load::-webkit-slider-thumb {
     -webkit-appearance: none;
@@ -37,7 +103,7 @@
     height: 26px;
     border-radius: 9999px;
     background: #DBC067;
-    border: 3px solid #132436;
+    border: 3px solid rgb(var(--app-bg));
     cursor: pointer;
   }
   .slider-load::-moz-range-thumb {
@@ -45,7 +111,7 @@
     height: 22px;
     border-radius: 9999px;
     background: #DBC067;
-    border: 3px solid #132436;
+    border: 3px solid rgb(var(--app-bg));
     cursor: pointer;
   }
   .slider-pain::-webkit-slider-thumb {
@@ -55,7 +121,7 @@
     height: 22px;
     border-radius: 9999px;
     background: #E05A66;
-    border: 3px solid #2a0a0f;
+    border: 3px solid rgb(var(--app-bg));
     cursor: pointer;
   }
   .slider-pain::-moz-range-thumb {
@@ -63,7 +129,7 @@
     height: 18px;
     border-radius: 9999px;
     background: #E05A66;
-    border: 3px solid #2a0a0f;
+    border: 3px solid rgb(var(--app-bg));
     cursor: pointer;
   }
 }

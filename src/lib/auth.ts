@@ -29,6 +29,18 @@ export async function getUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
+/**
+ * Visningsnavn for spilleren — hentes fra Supabase user_metadata
+ * (feltet `player_name`, kan settes i Dashboard → Auth → bruker).
+ * Returnerer tom streng hvis ikke satt.
+ */
+export async function getPlayerName(): Promise<string> {
+  const { data } = await supabase.auth.getUser();
+  const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
+  const name = meta?.player_name;
+  return typeof name === 'string' ? name : '';
+}
+
 /** Abonner på endringer i innloggingsstatus (login/logout/session refresh). */
 export function onAuthChange(callback: (loggedIn: boolean) => void): () => void {
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
