@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Login from './features/Login';
 import Home from './features/Home';
 import Log from './features/Log';
+import Plans from './features/Plans';
 import Stats from './features/Stats';
 import Settings from './features/Settings';
 import { isLoggedIn, logout, onAuthChange, getPlayerName } from './lib/auth';
@@ -9,7 +10,7 @@ import { getSettings } from './lib/db';
 import { seedDefaultCategories } from './lib/categories';
 import { syncManager, type SyncState } from './lib/sync';
 
-type Tab = 'home' | 'log' | 'stats' | 'settings';
+type Tab = 'home' | 'log' | 'plans' | 'stats' | 'settings';
 
 function SyncIndicator({ state }: { state: SyncState }) {
   const map: Record<SyncState['status'], { icon: string; text: string; cls: string }> = {
@@ -94,6 +95,7 @@ export default function App() {
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: 'home', label: 'Hjem', icon: '🏠' },
     { id: 'log', label: 'Loggfør', icon: '📝' },
+    { id: 'plans', label: 'Plan', icon: '🗓️' },
     { id: 'stats', label: 'Statistikk', icon: '📊' },
     { id: 'settings', label: 'Innstillinger', icon: '⚙️' }
   ];
@@ -133,6 +135,7 @@ export default function App() {
       <main className="px-4 pt-4">
         {tab === 'home' && <Home key={`h${refreshKey}`} onNavigate={setTab} playerName={playerName} />}
         {tab === 'log' && <Log key={`l${refreshKey}`} onSaved={bump} />}
+        {tab === 'plans' && <Plans key={`p${refreshKey}`} />}
         {tab === 'stats' && <Stats key={`s${refreshKey}`} />}
         {tab === 'settings' && (
           <Settings

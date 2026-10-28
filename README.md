@@ -17,6 +17,15 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 - Månedskalender med fargekoding – trykk på **hvilken som helst tidligere dag** for å
   etterregistrere eller rette
 
+**Ukeplanlegger**
+- Lag et vilkårlig antall ukeplaner (mandag–søndag) for å planlegge treningsopplegget
+- Per dag: planlagte økter med type trening (brukerens kategorier), planlagt
+  belastning (1–10), tid i minutter og fritekst-kommentar i liten skrift
+- **Favoritt-planer** kan merkes med ★ og sorteres øverst i listen
+- Hver plan har en **dashboard-oppsummering**: antall økter, total planlagt tid
+  (timer/minutter) og total planlagt belastning
+- Planer synkroniseres til skyen og følger med i backup/eksport
+
 **Statistikk**
 - Nøkkeltall for 7 / 30 / 90 dager / hele perioden: antall økter (per type),
   total og snitt belastning, **total treningstid**, total smerte, dager med smerte
@@ -27,6 +36,9 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 - Smerte per kroppsdel, scatter-plot belastning vs smerte
 - Registreringsstreak og belastningsendring vs forrige periode
 - Smertevarsel ved smerte ≥ 6 flere dager på rad
+- **Loggtabell**: knapp på statistikksiden viser en tabell over alle datoer de
+  siste 30 dagene – dato, ukedag (man–søn), treningstid (timer), belastning (score)
+  og smerte (score)
 
 **Utseende**
 - Mørkt tema (Viking FK) eller **lyst tema** – byttes under Innstillinger → Utseende

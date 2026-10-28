@@ -104,3 +104,11 @@ export function weekStartISO(iso: string): string {
 }
 
 export const WEEKDAY_LABELS = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+
+/** Korte ukedagsnavn (loggtabell-kolonne «man, tir, ons …»). */
+export const WEEKDAY_LABELS_SHORT = ['man', 'tir', 'ons', 'tor', 'fre', 'lør', 'søn'];
+
+/** Ukedag (0 = mandag … 6 = søndag) for en ISO-dato. */
+export function weekdayIndex(iso: string): number {
+  return (parseDay(iso).getDay() + 6) % 7;
+}

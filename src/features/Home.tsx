@@ -15,7 +15,7 @@ import { Card, CardTitle, StatCard, EmptyState, loadLabel } from '../components/
 import { chartTheme, chartTooltipStyle } from '../lib/theme';
 import { Area, Bar, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-type Tab = 'home' | 'log' | 'stats' | 'settings';
+type Tab = 'home' | 'log' | 'plans' | 'stats' | 'settings';
 
 export default function Home({
   onNavigate,
@@ -180,9 +180,14 @@ export default function Home({
           <h2 className="mb-2 mt-6 font-display text-base uppercase tracking-widest text-app-text">
             Flere detaljer
           </h2>
-          <button onClick={() => onNavigate('stats')} className="btn-ghost w-full">
-            Åpne full statistikk 📊
-          </button>
+          <div className="space-y-2">
+            <button onClick={() => onNavigate('plans')} className="btn-ghost w-full">
+              🗓️ Se ukeplaner
+            </button>
+            <button onClick={() => onNavigate('stats')} className="btn-ghost w-full">
+              Åpne full statistikk 📊
+            </button>
+          </div>
         </>
       )}
     </div>

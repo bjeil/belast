@@ -47,3 +47,27 @@ export interface AppSettings {
 }
 
 export type StatsWindow = 7 | 30 | 90 | 'all';
+
+/** Én planlagt trening i en ukeplan (dag + økt). */
+export interface PlannedSession {
+  activity: ActivityType; // kategorinøkkel, f.eks. "kamp_akademi"
+  load: number; // 1-10, planlagt belastning
+  durationMin: number; // planlagt tid i minutter
+  note?: string; // fritekst, vises i liten skrift i ukeplanen
+}
+
+/** Én dag i ukeplanen (mandag–søndag, 0 = mandag). */
+export interface PlannedDay {
+  weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  sessions: PlannedSession[];
+}
+
+/** En ukeplan (alltid mandag–søndag). Favoritter sorteres øverst i listen. */
+export interface WeekPlan {
+  id: string; // uuid
+  name: string;
+  favorite: boolean;
+  days: PlannedDay[]; // alltid 7 dager, sortert 0..6
+  updatedAt: string; // ISO — sist-skrevet-vinner ved synk
+  dirty?: boolean; // lokal endring ikke ennå pushet til skyen
+}

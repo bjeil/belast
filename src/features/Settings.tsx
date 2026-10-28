@@ -14,6 +14,7 @@ import {
   saveCategoryRow,
   clearAllCategories
 } from '../lib/categories';
+import { getAllPlans, savePlan, clearAllPlans } from '../lib/plans';
 import { exportBackup, exportCsv, parseBackup } from '../lib/export';
 import { syncManager, type SyncState } from '../lib/sync';
 import { saveEntry } from '../lib/db';
@@ -62,7 +63,8 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
   const doExportBackup = async () => {
     const entries = await getAllEntries();
     const categories = await getAllCategories();
-    exportBackup(entries, categories);
+    const plans = await getAllPlans();
+    exportBackup(entries, categories, plans);
     flash('Backup lastet ned ✔');
   };
 
@@ -76,9 +78,9 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
   const doExportCloud = async () => {
     setBusy(true);
     try {
-      const { entries, categories } = await syncManager.exportCloudData();
-      exportBackup(entries, categories);
-      flash(`Eksportert ${entries.length} dager fra skyen ✔`);
+      const { entries, categories, plans } = await syncManager.exportCloudData();
+      exportBackup(entries, categories, plans);
+      flash(`Eksportert ${entries.length} dager og ${plans.length} planer fra skyen ✔`);
     } catch (e) {
       flash(e instanceof Error ? e.message : 'Eksport fra sky feilet');
     }
@@ -101,9 +103,15 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
           await saveCategoryRow({ ...c, dirty: true });
         }
       }
+      if (backup.plans && backup.plans.length > 0) {
+        // Importer ukeplaner fra backup (versjon 3)
+        for (const p of backup.plans) {
+          await savePlan({ ...p, dirty: true });
+        }
+      }
       await refresh();
       void syncManager.sync();
-      flash(`Importert ${backup.entries.length} dager ✔ (synkroniseres)`);
+      flash(`Importert ${backup.entries.length} dager${backup.plans?.length ? ` og ${backup.plans.length} planer` : ''} ✔ (synkroniseres)`);
     } catch {
       flash('Kunne ikke lese backup-filen. Sjekk at det er riktig fil.');
     }
@@ -130,6 +138,7 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
   const wipeLocal = async () => {
     await clearAllEntries();
     await clearAllCategories();
+    await clearAllPlans();
     await seedDefaultCategories();
     await refresh();
     setConfirmWipe(false);
@@ -142,6 +151,7 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
       await syncManager.deleteAllCloudData();
       await clearAllEntries();
       await clearAllCategories();
+      await clearAllPlans();
       await seedDefaultCategories();
       await refresh();
       setConfirmCloudWipe(false);

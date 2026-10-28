@@ -18,17 +18,30 @@ import {
   saveCategoryRow
 } from './categories';
 import {
+  getDirtyPlans,
+  getPlan,
+  getPlanTombstones,
+  markPlanSynced,
+  markPlanTombstoneSynced,
+  savePlan,
+  deletePlan
+} from './plans';
+import {
   entryToRow,
   rowToEntry,
   sameDayContent,
   categoryToRow,
   rowToCategory,
   sameCategoryContent,
+  planToRow,
+  rowToPlan,
+  samePlanContent,
   type DayEntryRow,
-  type CategoryRow
+  type CategoryRow,
+  type WeekPlanRow
 } from './supabaseTypes';
 import { migrateLegacyActivityKeys } from './migrations';
-import type { Category, DayEntry } from './types';
+import type { Category, DayEntry, WeekPlan } from './types';
 
 /**
  * Synkronisering mellom lokal IndexedDB og Supabase.
@@ -108,7 +121,8 @@ class SyncManager {
   private async countPending(): Promise<number> {
     const days = (await getDirtySyncMeta()).length;
     const cats = (await getDirtyCategories()).length;
-    return days + cats;
+    const plans = (await getDirtyPlans()).length + (await getPlanTombstones()).length;
+    return days + cats + plans;
   }
 
   /** Kjører én-gangs migrering av gamle aktivitetsnøkler (sonelag → akademi). */
@@ -145,6 +159,13 @@ class SyncManager {
             await this.pullCategories(userId);
           } catch (e) {
             console.warn('[belast] Kategorisynk feilet (ikke kritisk):', e);
+          }
+          // Plansynk er «best effort» på samme måte
+          try {
+            await this.pushPlans(userId);
+            await this.pullPlans(userId);
+          } catch (e) {
+            console.warn('[belast] Plansynk feilet (ikke kritisk):', e);
           }
         })(),
         SYNC_TIMEOUT_MS,
@@ -311,6 +332,71 @@ class SyncManager {
     }
   }
 
+  /** Push dirty planer + tombstones (sletting) til skyen. */
+  private async pushPlans(userId: string): Promise<void> {
+    for (const tomb of await getPlanTombstones()) {
+      const { error } = await supabase.from('week_plans').upsert(
+        {
+          id: tomb.id,
+          user_id: userId,
+          name: '',
+          favorite: false,
+          days: [],
+          updated_at: new Date().toISOString(),
+          deleted: true
+        },
+        { onConflict: 'id' }
+      );
+      if (error) throw new Error(`Push sletting av plan feilet (${tomb.id}): ${error.message}`);
+      await markPlanTombstoneSynced(tomb.id);
+    }
+    for (const plan of await getDirtyPlans()) {
+      const { error } = await supabase
+        .from('week_plans')
+        .upsert(planToRow(plan, userId), { onConflict: 'id' });
+      if (error) throw new Error(`Push plan feilet (${plan.id}): ${error.message}`);
+      await markPlanSynced(plan.id);
+    }
+  }
+
+  /** Pull planer fra skyen (sist-skrevet-vinner per id). */
+  private async pullPlans(userId: string): Promise<void> {
+    const { data, error } = await supabase
+      .from('week_plans')
+      .select('*')
+      .eq('user_id', userId);
+    if (error) throw new Error(`Pull planer feilet: ${error.message}`);
+    if (!data) return;
+
+    const tombstoneIds = new Set((await getPlanTombstones()).map((t) => t.id));
+
+    for (const raw of data as WeekPlanRow[]) {
+      const local = await getPlan(raw.id);
+
+      if (raw.deleted) {
+        // Sletting i skyen → slett lokalt (med mindre lokal er dirty og nyere)
+        if (local && local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
+          continue; // lokal endring vinner, vil pushes tilbake
+        }
+        if (local) await deletePlan(raw.id);
+        continue;
+      }
+
+      const cloudPlan = rowToPlan(raw);
+      if (!local) {
+        await savePlan({ ...cloudPlan, dirty: false });
+        continue;
+      }
+      if (tombstoneIds.has(raw.id)) continue; // lokal sletting venter på push
+      if (local.dirty && new Date(local.updatedAt) > new Date(raw.updated_at)) {
+        continue; // lokal endring vinner, pushes neste runde
+      }
+      if (new Date(raw.updated_at) >= new Date(local.updatedAt) && !samePlanContent(local, cloudPlan)) {
+        await savePlan({ ...cloudPlan, dirty: false });
+      }
+    }
+  }
+
   /** Full nedlasting fra skyen (første innlogging på ny enhet). Overskriver ikke dirty lokale rader. */
   async fullDownload(): Promise<{ imported: number; skipped: number }> {
     const userId = await getUserId();
@@ -336,6 +422,7 @@ class SyncManager {
       imported++;
     }
     await this.pullCategories(userId);
+    await this.pullPlans(userId);
     this.setState({ pendingPush: await this.countPending() });
     return { imported, skipped };
   }
@@ -347,7 +434,7 @@ class SyncManager {
   }
 
   /** Eksporter alle rader fra skyen (for backup/deling). */
-  async exportCloudData(): Promise<{ entries: DayEntry[]; categories: Category[] }> {
+  async exportCloudData(): Promise<{ entries: DayEntry[]; categories: Category[]; plans: WeekPlan[] }> {
     const userId = await getUserId();
     if (!userId) throw new Error('Ikke logget inn');
     const { data, error } = await supabase
@@ -362,9 +449,16 @@ class SyncManager {
       .select('*')
       .eq('user_id', userId);
     if (catError) throw new Error(`Eksport kategorier feilet: ${catError.message}`);
+    const { data: planData, error: planError } = await supabase
+      .from('week_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('deleted', false);
+    if (planError) throw new Error(`Eksport planer feilet: ${planError.message}`);
     return {
       entries: ((data ?? []) as DayEntryRow[]).map((r) => rowToEntry({ ...r, pains: r.pains ?? [] })),
-      categories: ((catData ?? []) as CategoryRow[]).map(rowToCategory)
+      categories: ((catData ?? []) as CategoryRow[]).map(rowToCategory),
+      plans: ((planData ?? []) as WeekPlanRow[]).map(rowToPlan)
     };
   }
 
@@ -382,6 +476,13 @@ class SyncManager {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'categories' },
+        () => {
+          void this.sync();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'week_plans' },
         () => {
           void this.sync();
         }
