@@ -21,6 +21,7 @@ import {
   type PainEntry
 } from '../lib/types';
 import { deleteEntry, getAllEntries, getEntry, saveEntry } from '../lib/db';
+import { syncManager } from '../lib/sync';
 import { formatDayLong, isFuture, isToday, toISODate, WEEKDAY_LABELS } from '../lib/dates';
 import { Card, CardTitle, Slider, loadLabel, painLabel } from '../components/ui';
 
@@ -119,6 +120,7 @@ export default function Log({ onSaved }: LogProps) {
     setEditing(true);
     await loadEntries();
     onSaved();
+    void syncManager.sync(); // push til skyen i bakgrunnen
     setTimeout(() => setSavedMsg(''), 2500);
   };
 
@@ -129,6 +131,7 @@ export default function Log({ onSaved }: LogProps) {
     setConfirmDelete(false);
     await loadEntries();
     onSaved();
+    void syncManager.sync(); // push sletting til skyen
   };
 
   const calendarDays = useMemo(() => {

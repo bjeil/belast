@@ -24,18 +24,56 @@ Loggfør treningshverdagen – laget i Viking FK-tema
 - Registreringsstreak og belastningsendring vs forrige periode
 - Smertevarsel ved smerte ≥ 6 flere dager på rad
 
-**Data og personvern**
-- All data lagres **kun lokalt** i nettleseren (IndexedDB) – ingen sky, ingen konto, ingen sporing
-- Innlogging med brukernavn/passord (lokalt, passord lagres kun som SHA-256-hash i koden)
-- Eksport: **JSON-backup** (for gjenoppretting) og **CSV** (for Excel / deling med trener eller fysio)
+**Data, personvern og sky-sync**
+- Data lagres **lokalt** i nettleseren (IndexedDB) – appen fungerer offline
+- Data **synkroniseres til Supabase** (sky), slik at flere enheter (f.eks. far og sønn)
+  ser og oppdaterer samme logg
+- Innlogging via Supabase Auth med delt brukernavn/passord (se under)
+- Første gangs samtykke til lagring av data vises ved første innlogging (GDPR)
+- Eksport: **JSON-backup** (lokal gjenoppretting), **CSV** (Excel / deling) og
+  **JSON-eksport av alle data fra skyen**
+- Sletting: mulig å slette kun lokale data, eller **alle data både lokalt og i skyen**
 
 ## Innlogging
 
-- Brukernavn: `belast`
-- Passord: `Belast2026`
+- Brukernavn: `cbl`
+- Passord: `Fotball33`
 
-> Endre ved å generere ny hash: `printf 'NyttPassord' | sha256sum`, og sett den i
-> `src/lib/auth.ts` (konstant `AUTH_PASS_HASH`). Brukernavnet ligger i `AUTH_USER`.
+Innloggingen går via Supabase Auth. Internt mappes brukernavnet `cbl` til
+e-posten `cbl@belast.app` (se `src/lib/supabase.ts`). For å endre passord: gå til
+Supabase Dashboard → Authentication → Users, eller bruk "glemt passord"-flyten
+(når e-postbekreftelse er av).
+
+## Supabase-oppsett (gjøres én gang)
+
+1. Opprett prosjekt på [supabase.com](https://supabase.com)
+2. Kjør SQL-skriptet `supabase/schema.sql` i **SQL Editor** (lager tabell, RLS-policyer,
+   realtime og slette-funksjon)
+3. Gå til **Authentication → Providers → Email** og **fjern haken for "Confirm email"**
+4. Gå til **Authentication → Users → Add user**:
+   - Email: `cbl@belast.app`
+   - Password: `Fotball33`
+   - Kryss av for **"Auto Confirm User"**
+5. Sett følgende i `src/lib/supabase.ts` (eller som miljøvariabler
+   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`):
+   - Project URL
+   - anon public key
+
+> Anon-nøkkelen er offentlig ved design – all databeskyttelse skjer via
+> Row Level Security (RLS), slik at brukere kun ser egne data.
+
+## Hvordan synkronisering fungerer
+
+- **Lokal først**: hver endring lagres i IndexedDB med en "dirty"-flagg, og skyves
+  til Supabase i bakgrunnen
+- **Pull**: ved innlogging og ved endringer fra andre enheter hentes nyere data ned
+- **Sletting**: slettede dager markeres med tombstone (`deleted = true`) slik at
+  sletting også synkroniseres
+- **Konflikter**: ved samtidig redigering av samme dag vinner siste skriver
+  (etter `updated_at`); den tapende versjonen arkiveres og vises i Innstillinger
+- **Realtime**: endringer fra andre enheter trigges automatisk via Supabase realtime
+- Indikator i toppmenyen viser synkroniseringsstatus (synkronisert / synkroniserer /
+  feil / offline)
 
 ## Komme i gang
 
@@ -66,13 +104,14 @@ Appen er en **PWA**: åpne den i Safari (iOS) eller Chrome (Android) og velg
 ### Ta vare på dataene
 
 1. Gå til **Innstillinger → Data og sikkerhetskopi**
-2. Trykk **"Last ned backup (JSON)"** jevnlig – filen inneholder alle dager
+2. Trykk **"Last ned backup (JSON)"** jevnlig – filen inneholder alle lokale dager
 3. Ved bytte av telefon: installer appen på nytt, logg inn, og bruk
-   **"Importer backup (JSON)"**
+   **"Importer backup (JSON)"** – eller la sky-synkroniseringen hente dataene automatisk
 4. **CSV-eksport** gir en tabell du kan dele med andre eller analysere videre
    (Excel, Numbers, Google Sheets)
+5. **"Eksporter alle data fra skyen (JSON)"** henter hele loggen fra Supabase
 
 ## Teknologi
 
 React 18 + TypeScript + Vite + Tailwind CSS, Dexie (IndexedDB), Recharts (grafer),
-date-fns (norsk locale), vite-plugin-pwa, Vitest.
+date-fns (norsk locale), vite-plugin-pwa, Vitest, Supabase (auth + Postgres + realtime).

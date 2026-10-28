@@ -1,24 +1,108 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { login } from '../lib/auth';
+import { syncManager } from '../lib/sync';
+import { kvGet, kvSet } from '../lib/db';
+
+const CONSENT_KEY = 'belast:consent';
 
 export default function Login({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [consent, setConsent] = useState<boolean | null>(null);
+  const [accepted, setAccepted] = useState(false);
+
+  // Sjekk samtykke ved første visning
+  useEffect(() => {
+    kvGet<boolean>(CONSENT_KEY, false).then((ok) => {
+      setConsent(ok);
+      setAccepted(ok);
+    });
+  }, []);
+
+  const acceptConsent = async () => {
+    await kvSet(CONSENT_KEY, true);
+    setConsent(true);
+    setAccepted(true);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError('');
     const ok = await login(username, password);
-    setBusy(false);
     if (ok) {
+      // Første gang på denne enheten: last ned fra skyen
+      if (!navigator.onLine) {
+        // Offline — lokal data brukes, synk skjer når nettet er tilbake
+      } else {
+        try {
+          await syncManager.fullDownload();
+        } catch {
+          // Ignorer — vanlig synk vil hente data
+        }
+      }
+      await syncManager.init();
+      void syncManager.sync();
       onSuccess();
     } else {
       setError('Feil brukernavn eller passord.');
     }
+    setBusy(false);
   };
+
+  // Allerede logget inn (session fra tidligere) — vis ingenting, App håndterer
+  if (consent === null) return null;
+
+  if (!consent) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-viking-blue ring-4 ring-viking-gold">
+              <span className="font-display text-3xl text-viking-gold">V</span>
+            </div>
+            <h1 className="font-display text-2xl uppercase tracking-widest text-viking-white">
+              Belast
+            </h1>
+            <p className="mt-2 text-sm text-viking-gold">Viking FK · Power &amp; Love</p>
+          </div>
+          <div className="card space-y-4 p-6">
+            <h2 className="font-display text-sm uppercase tracking-widest text-viking-gold">
+              Før du starter
+            </h2>
+            <p className="text-sm text-viking-white/75">
+              Belast lagrer treningsloggen din i skyen (Supabase) slik at du og familien
+              kan oppdatere samme logg fra flere enheter. Dataene er <strong>ikke</strong>{' '}
+              koblet til navn eller andre personer — kun til denne delte kontoen.
+            </p>
+            <ul className="list-disc space-y-1 pl-5 text-sm text-viking-white/65">
+              <li>Du kan når som helst eksportere alle data (JSON/CSV)</li>
+              <li>Du kan når som helst slette alle data i skyen (Innstillinger)</li>
+              <li>Appen fungerer også offline — data synkroniseres når nettet er tilbake</li>
+            </ul>
+            <label className="flex items-start gap-3 text-sm text-viking-white/80">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(e) => setAccepted(e.target.checked)}
+                className="mt-1 h-4 w-4 accent-viking-gold"
+              />
+              Jeg forstår og samtykker til at treningsdata lagres i skyen for synkronisering.
+            </label>
+            <button
+              onClick={acceptConsent}
+              disabled={!accepted}
+              className="btn-primary w-full"
+            >
+              Godta og fortsett
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
@@ -68,7 +152,7 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
             {busy ? 'Logger inn …' : 'Logg inn'}
           </button>
           <p className="text-center text-xs text-viking-white/45">
-            Data lagres kun lokalt på denne enheten.
+            Data lagres lokalt på enheten og synkroniseres til skyen.
           </p>
         </form>
       </div>

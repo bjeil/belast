@@ -4,17 +4,34 @@ import Home from './features/Home';
 import Log from './features/Log';
 import Stats from './features/Stats';
 import Settings from './features/Settings';
-import { isLoggedIn, logout } from './lib/auth';
+import { isLoggedIn, logout, onAuthChange } from './lib/auth';
 import { getProfile, getSettings } from './lib/db';
+import { syncManager, type SyncState } from './lib/sync';
 
 type Tab = 'home' | 'log' | 'stats' | 'settings';
 
+function SyncIndicator({ state }: { state: SyncState }) {
+  const map: Record<SyncState['status'], { icon: string; text: string; cls: string }> = {
+    idle: { icon: '☁️', text: state.pendingPush > 0 ? `Venter på synk (${state.pendingPush})` : 'Synkronisert', cls: 'text-emerald-400' },
+    syncing: { icon: '🔄', text: 'Synkroniserer …', cls: 'text-viking-gold animate-pulse' },
+    error: { icon: '⚠️', text: 'Synkfeil — lokal data er trygg', cls: 'text-[#E05A66]' },
+    offline: { icon: '📴', text: 'Offline — endringer lagres lokalt', cls: 'text-viking-white/60' }
+  };
+  const s = map[state.status];
+  return (
+    <span className={`text-[11px] ${s.cls}`} title={state.lastError ?? s.text}>
+      {s.icon} {s.text}
+    </span>
+  );
+}
+
 export default function App() {
-  const [authed, setAuthed] = useState<boolean>(isLoggedIn());
+  const [authed, setAuthed] = useState<boolean | null>(null);
   const [tab, setTab] = useState<Tab>('home');
   const [refreshKey, setRefreshKey] = useState(0);
   const [playerName, setPlayerName] = useState('');
   const [lightMode, setLightMode] = useState(false);
+  const [syncState, setSyncState] = useState<SyncState>(syncManager.getState());
 
   const refreshProfile = useCallback(async () => {
     const p = await getProfile();
@@ -22,8 +39,36 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    refreshProfile();
+    isLoggedIn().then(async (ok) => {
+      setAuthed(ok);
+      if (ok) {
+        await syncManager.init();
+        void syncManager.sync().then(bump);
+      }
+    });
     getSettings().then((s) => setLightMode(s.theme === 'light'));
+    const unsubSync = syncManager.subscribe(setSyncState);
+    const unsubAuth = onAuthChange((loggedIn) => {
+      setAuthed(loggedIn);
+      if (loggedIn) {
+        void syncManager.sync().then(bump);
+      } else {
+        syncManager.destroy();
+      }
+    });
+    const unsubSyncData = syncManager.subscribe((s) => {
+      // Når en synk er ferdig (data kan ha kommet fra skyen), frisk opp visningene
+      if (s.status === 'idle') bump();
+    });
+    return () => {
+      unsubSync();
+      unsubAuth();
+      unsubSyncData();
+    };
+  }, []);
+
+  useEffect(() => {
+    refreshProfile();
   }, [refreshProfile]);
 
   useEffect(() => {
@@ -36,6 +81,14 @@ export default function App() {
   }, [lightMode]);
 
   const bump = () => setRefreshKey((k) => k + 1);
+
+  if (authed === null) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-viking-gold border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!authed) {
     return <Login onSuccess={() => setAuthed(true)} />;
@@ -65,15 +118,18 @@ export default function App() {
               )}
             </div>
           </div>
-          <button
-            onClick={() => {
-              logout();
-              setAuthed(false);
-            }}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-viking-white/80 hover:bg-white/5"
-          >
-            Logg ut
-          </button>
+          <div className="flex flex-col items-end gap-1">
+            <SyncIndicator state={syncState} />
+            <button
+              onClick={async () => {
+                await logout();
+                setAuthed(false);
+              }}
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-viking-white/80 hover:bg-white/5"
+            >
+              Logg ut
+            </button>
+          </div>
         </div>
       </header>
 

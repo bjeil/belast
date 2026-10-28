@@ -1,0 +1,115 @@
+import { describe, it, expect } from 'vitest';
+import {
+  entryToRow,
+  rowToEntry,
+  sameDayContent,
+  parsePains,
+  type DayEntryRow
+} from '../src/lib/supabaseTypes';
+import type { DayEntry } from '../src/lib/types';
+
+const USER_ID = 'test-user-uuid';
+
+function makeEntry(overrides: Partial<DayEntry> = {}): DayEntry {
+  return {
+    id: '2026-01-15',
+    date: '2026-01-15',
+    activities: ['trening_sonelag'],
+    load: 7,
+    durationMin: 90,
+    pains: [{ bodyPart: 'kne', level: 3, note: 'Litt støl' }],
+    note: 'God økt',
+    updatedAt: '2026-01-15T20:00:00.000Z',
+    ...overrides
+  };
+}
+
+describe('entryToRow / rowToEntry roundtrip', () => {
+  it('konverterer entry til rad og tilbake uten tap av data', () => {
+    const entry = makeEntry();
+    const row = entryToRow(entry, USER_ID);
+    expect(row.user_id).toBe(USER_ID);
+    expect(row.date).toBe('2026-01-15');
+    expect(row.deleted).toBe(false);
+
+    const fullRow: DayEntryRow = { id: 'some-uuid', ...row };
+    const back = rowToEntry(fullRow);
+    expect(back).toEqual(entry);
+  });
+
+  it('håndterer manglende valgfrie felt (durationMin, note)', () => {
+    const entry = makeEntry({ durationMin: undefined, note: undefined });
+    const row = entryToRow(entry, USER_ID);
+    expect(row.duration_min).toBeNull();
+    expect(row.note).toBeNull();
+
+    const back = rowToEntry({ id: 'x', ...row });
+    expect(back.durationMin).toBeUndefined();
+    expect(back.note).toBeUndefined();
+    expect(sameDayContent(back, entry)).toBe(true);
+  });
+
+  it('bevarer tom pains-liste', () => {
+    const entry = makeEntry({ pains: [] });
+    const back = rowToEntry({ id: 'x', ...entryToRow(entry, USER_ID) });
+    expect(back.pains).toEqual([]);
+  });
+});
+
+describe('sameDayContent', () => {
+  it('er true for identiske innhold', () => {
+    expect(sameDayContent(makeEntry(), makeEntry())).toBe(true);
+  });
+
+  it('er false når load er forskjellig', () => {
+    expect(sameDayContent(makeEntry(), makeEntry({ load: 8 }))).toBe(false);
+  });
+
+  it('er false når aktiviteter er forskjellig', () => {
+    expect(
+      sameDayContent(makeEntry(), makeEntry({ activities: ['kamp_hana'] }))
+    ).toBe(false);
+  });
+
+  it('er false når pains er forskjellig', () => {
+    expect(
+      sameDayContent(makeEntry(), makeEntry({ pains: [{ bodyPart: 'rygg', level: 5 }] }))
+    ).toBe(false);
+  });
+
+  it('er false når note er forskjellig', () => {
+    expect(sameDayContent(makeEntry(), makeEntry({ note: 'Annen kommentar' }))).toBe(false);
+  });
+
+  it('ignorerer updatedAt og id (ikke innhold)', () => {
+    const a = makeEntry({ updatedAt: '2026-01-15T10:00:00.000Z' });
+    const b = makeEntry({ updatedAt: '2026-01-16T10:00:00.000Z', id: 'annen-id' });
+    expect(sameDayContent(a, b)).toBe(true);
+  });
+});
+
+describe('parsePains', () => {
+  it('returnerer tom liste for ugyldig input', () => {
+    expect(parsePains(null)).toEqual([]);
+    expect(parsePains(undefined)).toEqual([]);
+    expect(parsePains('ikke-array')).toEqual([]);
+    expect(parsePains({})).toEqual([]);
+  });
+
+  it('filtrerer bort ugyldige elementer', () => {
+    const raw = [
+      { bodyPart: 'kne', level: 4 },
+      { bodyPart: 123, level: 4 },
+      { level: 4 },
+      null,
+      'tekst',
+      { bodyPart: 'fot', level: 'høy' }
+    ];
+    expect(parsePains(raw)).toEqual([{ bodyPart: 'kne', level: 4 }]);
+  });
+
+  it('bevarer note på gyldige elementer', () => {
+    const raw = [{ bodyPart: 'lar', level: 2, note: 'Støl' }];
+    expect(parsePains(raw)).toEqual([{ bodyPart: 'lar', level: 2, note: 'Støl' }]);
+  });
+});

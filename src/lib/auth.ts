@@ -1,32 +1,38 @@
-import { sha256Hex } from './sha256';
+import { supabase, usernameToEmail } from './supabase';
 
 /**
- * Enkel lokal innlogging. Brukernavn og passord er konfigurert her i koden;
- * kun SHA-256-hash av passordet sammenlignes – aldri klartekst.
- * Økt lagres i sessionStorage (ryddes når nettleserfanen lukkes).
+ * Innlogging via Supabase Auth. Brukernavnet "cbl" oversettes til en intern
+ * e-post — brukeren ser aldri e-postadressen. Økten lagres av Supabase
+ * (localStorage) og overlever lukking av appen.
  */
 
-export const AUTH_USER = 'belast';
-
-// sha256("Belast2026")
-export const AUTH_PASS_HASH = '91346aa7a88f13032c90d6a4775d0448f7fbbb48accbf25b815d9c3f66572e23';
-
-const SESSION_KEY = 'belast:session';
-
 export async function login(username: string, password: string): Promise<boolean> {
-  const ok =
-    username.trim().toLowerCase() === AUTH_USER &&
-    (await sha256Hex(password)) === AUTH_PASS_HASH;
-  if (ok) {
-    sessionStorage.setItem(SESSION_KEY, '1');
-  }
-  return ok;
+  const { error } = await supabase.auth.signInWithPassword({
+    email: usernameToEmail(username),
+    password
+  });
+  return !error;
 }
 
-export function logout(): void {
-  sessionStorage.removeItem(SESSION_KEY);
+export async function logout(): Promise<void> {
+  await supabase.auth.signOut();
 }
 
-export function isLoggedIn(): boolean {
-  return sessionStorage.getItem(SESSION_KEY) === '1';
+export async function isLoggedIn(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
+}
+
+/** Hent innlogget bruker-id (nødvendig for synk). */
+export async function getUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getUser();
+  return data.user?.id ?? null;
+}
+
+/** Abonner på endringer i innloggingsstatus (login/logout/session refresh). */
+export function onAuthChange(callback: (loggedIn: boolean) => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    callback(!!session);
+  });
+  return () => data.subscription.unsubscribe();
 }
