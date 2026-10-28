@@ -83,6 +83,24 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
+/**
+ * Oversetter tekniske Supabase/Postgres-feil til norsk, brukervennlig melding.
+ * 42P01 = undefined_table (tabellen finnes ikke — schema.sql ikke kjørt).
+ * 42501 = insufficient_privilege (RLS-policy mangler).
+ */
+function friendlySyncError(scope: string, rawMsg: string): string {
+  if (rawMsg.includes('42P01') || /relation .* does not exist/i.test(rawMsg)) {
+    return `${scope}: tabell mangler i skyen — kjør supabase/schema.sql i SQL Editor`;
+  }
+  if (rawMsg.includes('42501') || /permission denied/i.test(rawMsg)) {
+    return `${scope}: mangler tilgang (RLS) — sjekk policyer i Supabase`;
+  }
+  if (/JWT|auth|401|403/i.test(rawMsg)) {
+    return `${scope}: ikke logget inn — logg ut og inn igjen`;
+  }
+  return `${scope}: ${rawMsg}`;
+}
+
 class SyncManager {
   private state: SyncState = { status: 'idle', lastSyncAt: null, lastError: null, pendingPush: 0 };
   private listeners = new Set<Listener>();
@@ -149,6 +167,9 @@ class SyncManager {
     }
     this.syncing = true;
     this.setState({ status: 'syncing', lastError: null });
+    // Feil fra kategorier/planer samles her — dag-synken skal aldri ta ned resten,
+    // men brukeren skal se at noe feilet (ellers sitter man igjen med «Venter på synk»).
+    const softErrors: string[] = [];
     try {
       // Watchdog: synken skal aldri kunne henge appen i «Synkroniserer…»-modus
       await withTimeout(
@@ -160,14 +181,18 @@ class SyncManager {
             await this.pushCategories(userId);
             await this.pullCategories(userId);
           } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
             console.warn('[belast] Kategorisynk feilet (ikke kritisk):', e);
+            softErrors.push(friendlySyncError('Kategorier', msg));
           }
           // Plansynk er «best effort» på samme måte
           try {
             await this.pushPlans(userId);
             await this.pullPlans(userId);
           } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
             console.warn('[belast] Plansynk feilet (ikke kritisk):', e);
+            softErrors.push(friendlySyncError('Planer', msg));
           }
         })(),
         SYNC_TIMEOUT_MS,
@@ -175,8 +200,9 @@ class SyncManager {
       );
       await kvSet(LAST_SYNC_KEY, new Date().toISOString());
       this.setState({
-        status: 'idle',
+        status: softErrors.length > 0 ? 'error' : 'idle',
         lastSyncAt: new Date().toISOString(),
+        lastError: softErrors.length > 0 ? softErrors.join(' · ') : null,
         pendingPush: await this.countPending()
       });
     } catch (e) {
@@ -296,16 +322,23 @@ class SyncManager {
     }
   }
 
-  /** Push dirty kategorier til skyen. */
+  /** Push dirty kategorier til skyen. Samler feil — én feil stopper ikke resten. */
   private async pushCategories(userId: string): Promise<void> {
     const dirty = await getDirtyCategories();
+    const errors: string[] = [];
     for (const cat of dirty) {
       const row = categoryToRow(cat, userId);
       const { error } = await supabase
         .from('categories')
         .upsert(row, { onConflict: 'user_id,kind,key' });
-      if (error) throw new Error(`Push kategori feilet (${cat.kind}/${cat.key}): ${error.message}`);
+      if (error) {
+        errors.push(`kategori ${cat.kind}/${cat.key}: ${error.message}`);
+        continue; // ikke marker som synced — prøves igjen neste runde
+      }
       await markCategorySynced(cat.kind, cat.key);
+    }
+    if (errors.length > 0) {
+      throw new Error(`Push kategorier feilet (${errors.length}/${dirty.length}): ${errors[0]}`);
     }
   }
 
@@ -334,9 +367,11 @@ class SyncManager {
     }
   }
 
-  /** Push dirty planer + tombstones (sletting) til skyen. */
+  /** Push dirty planer + tombstones (sletting) til skyen. Samler feil — én feil stopper ikke resten. */
   private async pushPlans(userId: string): Promise<void> {
-    for (const tomb of await getPlanTombstones()) {
+    const errors: string[] = [];
+    const tombstones = await getPlanTombstones();
+    for (const tomb of tombstones) {
       const { error } = await supabase.from('week_plans').upsert(
         {
           id: tomb.id,
@@ -349,15 +384,25 @@ class SyncManager {
         },
         { onConflict: 'id' }
       );
-      if (error) throw new Error(`Push sletting av plan feilet (${tomb.id}): ${error.message}`);
+      if (error) {
+        errors.push(`sletting ${tomb.id}: ${error.message}`);
+        continue; // ikke marker som synced — prøves igjen neste runde
+      }
       await markPlanTombstoneSynced(tomb.id);
     }
-    for (const plan of await getDirtyPlans()) {
+    const dirtyPlans = await getDirtyPlans();
+    for (const plan of dirtyPlans) {
       const { error } = await supabase
         .from('week_plans')
         .upsert(planToRow(plan, userId), { onConflict: 'id' });
-      if (error) throw new Error(`Push plan feilet (${plan.id}): ${error.message}`);
+      if (error) {
+        errors.push(`plan «${plan.name}": ${error.message}`);
+        continue; // ikke marker som synced — prøves igjen neste runde
+      }
       await markPlanSynced(plan.id);
+    }
+    if (errors.length > 0) {
+      throw new Error(`Push planer feilet (${errors.length} av ${tombstones.length + dirtyPlans.length}): ${errors[0]}`);
     }
   }
 
