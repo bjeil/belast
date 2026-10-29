@@ -111,6 +111,48 @@ alter table public.day_entries
 > Nye installasjoner trenger ikke dette – `supabase/schema.sql` lager kolonnene
 > automatisk.
 
+### Migrasjon 2: historikk på alle tabeller (SCD2)
+
+Har du allerede en database kjørende (opprettet før historikk ble innført), må du
+legge til historikktabeller og triggere. Dette gjøres én gang:
+
+1. Gå til **Supabase Dashboard → SQL Editor**
+2. Kjør migrasjonsskriptet `supabase/migrations/002_add_history_scd2.sql`
+   (idempotent, trygt å kjøre flere ganger)
+3. Verifiser i **Table Editor** at tabellene `day_entries_history`,
+   `categories_history` og `week_plans_history` nå finnes, og at kolonnen
+   `valid_from` er satt på eksisterende rader i `day_entries`, `categories`
+   og `week_plans`
+
+> Nye installasjoner trenger ikke dette – `supabase/schema.sql` lager historikk
+> automatisk.
+
+## Hvordan historikk fungerer (SCD2)
+
+Alle tre tabeller (`day_entries`, `categories`, `week_plans`) har nå full
+historikk i egne `*_history`-tabeller. Appen forholder seg **kun** til de
+aktive tabellene – historikken skrives automatisk av database-triggere:
+
+- Hver historikkrad er **én versjon** av en rad, med gyldighetsintervall
+  `[valid_from, valid_to)`
+- Ved **INSERT** settes `valid_from` automatisk (tilsvarer `updated_at`)
+- Ved **UPDATE** arkiveres forrige versjon i historikk med
+  `valid_to = ny updated_at` – den nye versjonen blir aktiv
+- Ved **DELETE** arkiveres siste versjon, slik at sletting også bevares
+- Appen skriver aldri til historikken – kun trigger-funksjonen gjør det
+  (`security definer`); brukere har kun lesetilgang via RLS
+- **GDPR**: «Slett alle data» (`delete_all_my_data()`) sletter nå både aktive
+  rader og historikk for brukeren
+
+Eksempel på spørring – «hva sto det for en dag, på et gitt tidspunkt?»:
+
+```sql
+select * from public.day_entries_history
+where user_id = auth.uid() and date = '2026-01-15'
+  and valid_from <= '2026-01-20T00:00:00Z'
+  and valid_to   >  '2026-01-20T00:00:00Z';
+```
+
 ## Hvordan synkronisering fungerer
 
 - **Lokal først**: hver endring lagres i IndexedDB med en "dirty"-flagg, og skyves
@@ -122,6 +164,8 @@ alter table public.day_entries
   (etter `updated_at`); den tapende versjonen arkiveres og vises i Innstillinger
 - **Realtime**: endringer fra andre enheter trigges automatisk via Supabase realtime
 - **Kategorier** synkroniseres på samme måte (egen tabell `categories` i Supabase)
+- **Historikk**: hver endring arkiveres automatisk i `*_history`-tabellene
+  (SCD2) – appen trenger ikke å vite om det
 - Indikator i toppmenyen viser synkroniseringsstatus (synkronisert / synkroniserer /
   feil / offline)
 
