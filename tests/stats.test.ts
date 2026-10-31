@@ -51,7 +51,7 @@ describe('computeWindowStats', () => {
   const entries = [
     entry(iso(0), { activities: ['kamp_akademi'], load: 8, pains: [{ bodyPart: 'kne', level: 7 }] }),
     entry(iso(1), { activities: ['trening_hana'], load: 4 }),
-    entry(iso(2), { activities: ['hviledag'], load: 1 }),
+    entry(iso(2), { activities: ['hviledag'], load: null }),
     entry(iso(10), { activities: ['egentrening'], load: 6, pains: [{ bodyPart: 'rygg', level: 3 }] })
   ];
 
@@ -143,8 +143,14 @@ describe('computeACWR', () => {
 
   it('teller hviledager som 0 belastning', () => {
     const entries: DayEntry[] = [];
-    for (let i = 7; i < 35; i++) entries.push(entry(iso(i), { activities: ['hviledag'], load: 1 }));
+    for (let i = 7; i < 35; i++) entries.push(entry(iso(i), { activities: ['hviledag'], load: null }));
     expect(computeACWR(entries, NOW).chronic).toBe(0);
+  });
+
+  it('tåler load = null på aktive dager uten å knekke', () => {
+    const entries = [entry(iso(0), { load: null })];
+    const { acute } = computeACWR(entries, NOW);
+    expect(acute).toBeCloseTo(0);
   });
 
   it('soner', () => {
@@ -169,7 +175,7 @@ describe('streaks', () => {
 
 describe('serier', () => {
   it('dailyLoadSeries gir én verdi per dag, 0 på hvile/ikke registrert', () => {
-    const entries = [entry(iso(1), { load: 7 }), entry(iso(3), { activities: ['hviledag'], load: 1 })];
+    const entries = [entry(iso(1), { load: 7 }), entry(iso(3), { activities: ['hviledag'], load: null })];
     const series = dailyLoadSeries(entries, 7, NOW);
     expect(series).toHaveLength(7);
     expect(series[6].load).toBe(0); // i dag, ikke registrert
@@ -181,7 +187,7 @@ describe('serier', () => {
     const entries = [
       entry(iso(1), { load: 7, durationMin: 90 }),
       entry(iso(2), { load: 5, durationMin: undefined }), // ingen varighet
-      entry(iso(3), { activities: ['hviledag'], load: 1, durationMin: 45 })
+      entry(iso(3), { activities: ['hviledag'], load: null, durationMin: 45 })
     ];
     const series = dailyLoadSeries(entries, 7, NOW);
     expect(series[5].durationMin).toBe(90); // i går
@@ -206,7 +212,7 @@ describe('serier', () => {
 
   it('dailyLoadSeries tar med søvn/næring også på hviledager', () => {
     const entries = [
-      entry(iso(1), { activities: ['hviledag'], load: 1, sleepScore: 9, nutritionScore: 7 })
+      entry(iso(1), { activities: ['hviledag'], load: null, sleepScore: 9, nutritionScore: 7 })
     ];
     const series = dailyLoadSeries(entries, 7, NOW);
     expect(series[5].load).toBe(0); // hviledag
@@ -234,7 +240,7 @@ describe('serier', () => {
   it('loadVsPain hopper over hviledager og ikke-registrerte dager', () => {
     const entries = [
       entry(iso(0), { load: 6, pains: [{ bodyPart: 'kne', level: 4 }] }),
-      entry(iso(1), { activities: ['hviledag'], load: 1 })
+      entry(iso(1), { activities: ['hviledag'], load: null })
     ];
     const data = loadVsPain(entries, 7, NOW);
     expect(data).toHaveLength(1);

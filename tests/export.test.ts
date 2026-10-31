@@ -21,7 +21,7 @@ const entries: DayEntry[] = [
     id: '2025-06-11',
     date: '2025-06-11',
     activities: ['hviledag'],
-    load: 1,
+    load: null,
     pains: [],
     updatedAt: '2025-06-11T20:00:00.000Z'
   }

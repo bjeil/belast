@@ -84,4 +84,11 @@ describe('logTableRows', () => {
     expect(logTableRows([], 7, NOW)).toHaveLength(7);
     expect(logTableRows([], 90, NOW)).toHaveLength(90);
   });
+
+  it('viser hviledag som null belastning (ikke 5)', () => {
+    const entries = [entry(iso(2), { activities: ['hviledag'], load: null })];
+    const rows = logTableRows(entries, 30, NOW);
+    expect(rows[2].load).toBeNull();
+    expect(rows[2].logged).toBe(true);
+  });
 });
