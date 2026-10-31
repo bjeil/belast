@@ -35,7 +35,7 @@ export interface DayEntry {
   id: string; // yyyy-MM-dd, én post per dag
   date: string;
   activities: ActivityType[];
-  load: number; // 1-10, opplevd belastning (sRPE)
+  load: number | null; // 1-10, opplevd belastning (sRPE); null = ingen belastning (f.eks. hviledag)
   durationMin?: number;
   sleepScore?: number; // 1-10, søvnkvalitet (valgfritt)
   nutritionScore?: number; // 1-10, næring/kosthold (valgfritt)

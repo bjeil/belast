@@ -6,7 +6,7 @@ export interface DayEntryRow {
   user_id: string;
   date: string; // yyyy-MM-dd
   activities: ActivityType[]; // tekstnøkler, f.eks. "kamp_akademi"
-  load: number;
+  load: number | null;
   duration_min: number | null;
   sleep_score: number | null;
   nutrition_score: number | null;
@@ -161,7 +161,7 @@ export function rowToCategory(row: CategoryRow): Category {
 /** Sammenligner to versjoner av samme dag — true hvis like (for konfliktsjekk). */
 export function sameDayContent(a: DayEntry, b: DayEntry): boolean {
   return (
-    a.load === b.load &&
+    (a.load ?? null) === (b.load ?? null) &&
     a.durationMin === b.durationMin &&
     (a.sleepScore ?? null) === (b.sleepScore ?? null) &&
     (a.nutritionScore ?? null) === (b.nutritionScore ?? null) &&

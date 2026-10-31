@@ -33,7 +33,7 @@ const emptyDraft = (date: string): DayEntry => ({
   id: date,
   date,
   activities: [],
-  load: 5,
+  load: null,
   durationMin: undefined,
   sleepScore: undefined,
   nutritionScore: undefined,
@@ -102,12 +102,15 @@ export default function Log({ onSaved }: LogProps) {
     }
     // Påhuking: «hviledag» er eksklusivt, andre kan kombineres
     let activities: ActivityType[];
+    let load = draft.load;
     if (a === REST_DAY) {
       activities = [REST_DAY];
+      load = null; // hviledag har ingen belastning
     } else {
       activities = [...draft.activities.filter((x) => x !== REST_DAY), a];
+      if (load == null) load = 5; // bytter bort fra hviledag → gjenopprett standardverdi
     }
-    setDraft({ ...draft, activities });
+    setDraft({ ...draft, activities, load });
   };
 
   const addPain = () => {
@@ -306,11 +309,11 @@ export default function Log({ onSaved }: LogProps) {
                     Opplevd belastning
                   </p>
                   <span className="font-display text-lg text-app-gold">
-                    {draft.load} <span className="text-xs font-body text-app-text/60">· {loadLabel(draft.load)}</span>
+                    {draft.load ?? 5} <span className="text-xs font-body text-app-text/60">· {loadLabel(draft.load ?? 5)}</span>
                   </span>
                 </div>
                 <Slider
-                  value={draft.load}
+                  value={draft.load ?? 5}
                   onChange={(v) => setDraft({ ...draft, load: v })}
                   ariaLabel="Opplevd belastning"
                 />
