@@ -10,12 +10,20 @@
 --      får load = NULL. Historikken (SCD2) arkiverer gamle versjoner via trigger.
 -- ============================================================================
 
--- 1. Fjern gammel check og sett ny som også tillater NULL
+-- 1. Fjern gammel NOT NULL + check, sett ny check som også tillater NULL
+alter table public.day_entries
+  alter column load drop not null;
+
 alter table public.day_entries
   drop constraint if exists day_entries_load_check;
 
 alter table public.day_entries
   add constraint day_entries_load_check check (load is null or load between 1 and 10);
+
+-- 1b. Historikktabellen må også tåle NULL load, ellers feiler arkiv-triggeren
+--     når en hviledag senere oppdateres.
+alter table public.day_entries_history
+  alter column load drop not null;
 
 -- 2. Nullstill load på hviledager (denne UPDATE-en arkiveres i historikken)
 update public.day_entries
