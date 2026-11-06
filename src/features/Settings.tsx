@@ -213,7 +213,7 @@ export default function Settings({ onThemeChanged }: SettingsProps) {
               <div key={c.id} className="rounded-lg border border-amber-400/30 bg-app-surface-deep/60 p-2 text-xs">
                 <p className="font-semibold text-app-gold">{c.date}</p>
                 <p className="text-app-text/60">
-                  Vinner: {c.resolution === 'cloud' ? 'sky' : 'lokal'} · belastning {c.cloudEntry.load} (sky) / {c.localEntry.load} (lokal)
+                  Vinner: {c.resolution === 'cloud' ? 'sky' : 'lokal'} · belastning {c.cloudEntry.load ?? '–'} (sky) / {c.localEntry.load ?? '–'} (lokal)
                 </p>
               </div>
             ))}

@@ -11,7 +11,7 @@ create table if not exists public.day_entries (
   user_id       uuid not null references auth.users(id) on delete cascade,
   date          date not null,
   activities    text[] not null default '{}',
-  load          int  not null check (load between 1 and 10),
+  load          int  check (load is null or load between 1 and 10), -- NULL = ingen belastning (f.eks. hviledag)
   duration_min  int,
   sleep_score   int check (sleep_score between 1 and 10),
   nutrition_score int check (nutrition_score between 1 and 10),
@@ -206,7 +206,7 @@ create table if not exists public.day_entries_history (
   user_id     uuid not null,
   date        date not null,
   activities  text[] not null,
-  load        int  not null,
+  load        int, -- NULL = ingen belastning (f.eks. hviledag)
   duration_min  int,
   sleep_score   int,
   nutrition_score int,

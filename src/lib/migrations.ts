@@ -1,7 +1,8 @@
 import { kvGet, kvSet } from './db';
-import type { DayEntry } from './types';
+import { REST_DAY, type DayEntry } from './types';
 
 const MIGRATION_KEY = 'migrations:activityKeysV1';
+const REST_LOAD_MIGRATION_KEY = 'migrations:restDayLoadNullV1';
 
 /** Gamle faste nøkler → nye standardkategorier (kjøres én gang, idempotent). */
 const ACTIVITY_KEY_MAP: Record<string, string> = {
@@ -45,5 +46,30 @@ export async function migrateLegacyActivityKeys(
     }
   }
   await kvSet(MIGRATION_KEY, true);
+  return changedCount;
+}
+
+/** true hvis dagen er en hviledag (ingen eller kun «hviledag» som aktivitet). */
+export function isRestActivities(activities: string[]): boolean {
+  return activities.length === 0 || (activities.length === 1 && activities[0] === REST_DAY);
+}
+
+/**
+ * Kjør én-gangs migrering: hviledager skal ha load = null (ikke 5 eller annen verdi).
+ * Returnerer antall dager som ble endret. Idempotent.
+ */
+export async function migrateRestDayLoadToNull(
+  getAll: () => Promise<DayEntry[]>,
+  save: (entry: DayEntry) => Promise<void>
+): Promise<number> {
+  if (await kvGet<boolean>(REST_LOAD_MIGRATION_KEY, false)) return 0;
+  let changedCount = 0;
+  for (const entry of await getAll()) {
+    if (isRestActivities(entry.activities) && entry.load != null) {
+      changedCount++;
+      await save({ ...entry, load: null });
+    }
+  }
+  await kvSet(REST_LOAD_MIGRATION_KEY, true);
   return changedCount;
 }

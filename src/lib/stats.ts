@@ -59,9 +59,9 @@ export function computeWindowStats(
   for (const e of inWindow) {
     if (!isRestDay(e)) {
       stats.activeDays++;
-      stats.totalLoad += e.load;
+      stats.totalLoad += e.load ?? 0;
       stats.totalDurationMin += e.durationMin ?? 0;
-      if (e.load > stats.maxLoad) {
+      if (e.load != null && e.load > stats.maxLoad) {
         stats.maxLoad = e.load;
         stats.maxLoadDay = e.date;
       }
@@ -108,7 +108,7 @@ export function computeACWR(
   entries: DayEntry[],
   now: Date = new Date()
 ): { acute: number; chronic: number; ratio: number | null } {
-  const byDate = new Map(entries.map((e) => [e.date, isRestDay(e) ? 0 : e.load]));
+  const byDate = new Map(entries.map((e) => [e.date, isRestDay(e) ? 0 : (e.load ?? 0)]));
   const today = startOfDay(now);
 
   const avgOver = (offsets: number[]): number | null => {
@@ -171,7 +171,7 @@ export function dailyLoadSeries(
     const e = byDate.get(iso);
     series.push({
       date: iso,
-      load: e && !isRestDay(e) ? e.load : 0,
+      load: e && !isRestDay(e) ? (e.load ?? 0) : 0,
       pain: e ? e.pains.reduce((s, p) => s + p.level, 0) : 0,
       durationMin: e && !isRestDay(e) ? e.durationMin ?? 0 : 0,
       sleepScore: e?.sleepScore ?? 0,
@@ -201,7 +201,7 @@ export function weeklyLoadSeries(
     const monday = toISODate(addDays(d, -((d.getDay() + 6) % 7)));
     const b = buckets.get(monday);
     if (b) {
-      b.totalLoad += e.load;
+      b.totalLoad += e.load ?? 0;
       b.sessions += e.activities.length;
       b.totalDurationMin += e.durationMin ?? 0;
     }
@@ -260,7 +260,7 @@ export function heatmapData(
     const e = byDate.get(iso);
     return {
       date: iso,
-      load: e && !isRestDay(e) ? e.load : 0,
+      load: e && !isRestDay(e) ? (e.load ?? 0) : 0,
       hasPain: !!e && e.pains.length > 0
     };
   });
@@ -277,7 +277,7 @@ export function loadVsPain(entries: DayEntry[], days: number, now: Date = new Da
     if (!e || isRestDay(e)) continue;
     out.push({
       date: iso,
-      load: e.load,
+      load: e.load ?? 0,
       pain: e.pains.reduce((s, p) => s + p.level, 0)
     });
   }
@@ -309,7 +309,7 @@ export function loadChangePercent(entries: DayEntry[], window: 7 | 30 | 90, now:
     const byDate = new Map(entries.map((e) => [e.date, e]));
     for (let off = fromOffset; off <= toOffset; off++) {
       const e = byDate.get(toISODate(addDays(today, -off)));
-      if (e && !isRestDay(e)) total += e.load;
+      if (e && !isRestDay(e)) total += e.load ?? 0;
     }
     return total;
   };
@@ -347,7 +347,7 @@ export function logTableRows(entries: DayEntry[], days = 30, now: Date = new Dat
       date: iso,
       weekday: WEEKDAY_LABELS_SHORT[weekdayIndex(iso)],
       durationHours: e && e.durationMin ? e.durationMin / 60 : null,
-      load: e ? e.load : null,
+      load: e && !isRestDay(e) ? e.load : null,
       pain,
       hasPain: !!e && e.pains.length > 0,
       sleepScore: e?.sleepScore ?? null,

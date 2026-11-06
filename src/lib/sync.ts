@@ -42,7 +42,7 @@ import {
   type CategoryRow,
   type WeekPlanRow
 } from './supabaseTypes';
-import { migrateLegacyActivityKeys } from './migrations';
+import { migrateLegacyActivityKeys, migrateRestDayLoadToNull } from './migrations';
 import type { Category, DayEntry, WeekPlan } from './types';
 
 /**
@@ -145,12 +145,15 @@ class SyncManager {
     return days + cats + plans;
   }
 
-  /** Kjører én-gangs migrering av gamle aktivitetsnøkler (sonelag → akademi). */
+  /** Kjører én-gangs migreringer (gamle aktivitetsnøkler, hviledag-load). */
   async runMigrations(): Promise<void> {
-    const changed = await migrateLegacyActivityKeys(getAllEntries, async (entry) => {
+    const save = async (entry: DayEntry) => {
       await db.days.put({ ...entry, id: entry.date });
       await db.syncMeta.put({ date: entry.date, syncedAt: '', dirty: true, deleted: false });
-    });
+    };
+    const changed =
+      (await migrateLegacyActivityKeys(getAllEntries, save)) +
+      (await migrateRestDayLoadToNull(getAllEntries, save));
     if (changed > 0) {
       this.setState({ pendingPush: await this.countPending() });
     }
@@ -227,7 +230,7 @@ class SyncManager {
           user_id: userId,
           date: meta.date,
           activities: [],
-          load: 1,
+          load: null,
           duration_min: null,
           sleep_score: null,
           nutrition_score: null,

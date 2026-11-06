@@ -90,6 +90,14 @@ describe('sameDayContent', () => {
     expect(sameDayContent(makeEntry(), makeEntry({ load: 8 }))).toBe(false);
   });
 
+  it('håndterer load = null (hviledag) i roundtrip og sammenligning', () => {
+    const rest = makeEntry({ activities: ['hviledag'], load: null });
+    const back = rowToEntry({ id: 'x', ...entryToRow(rest, USER_ID) });
+    expect(back.load).toBeNull();
+    expect(sameDayContent(back, rest)).toBe(true);
+    expect(sameDayContent(rest, makeEntry({ activities: ['hviledag'], load: 5 }))).toBe(false);
+  });
+
   it('er false når aktiviteter er forskjellig', () => {
     expect(
       sameDayContent(makeEntry(), makeEntry({ activities: ['kamp_hana'] }))
