@@ -8,7 +8,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://afhwprvvkmsdqhlhppkj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_FSiz0YPwRVRQdqhQkfrsMw_ET6lO6u1';
 
-export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+export const supabase: SupabaseClient<any, 'belast', 'belast'> = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  db: {
+    // Alle tabeller/funksjoner for appen ligger i eget skjema (ikke public),
+    // slik at flere apper kan dele samme Supabase-prosjekt. Public beholdes som backup.
+    schema: 'belast'
+  },
   auth: {
     persistSession: true,
     autoRefreshToken: true,

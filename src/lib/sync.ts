@@ -520,21 +520,21 @@ class SyncManager {
       .channel('belast-sync')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'day_entries' },
+        { event: '*', schema: 'belast', table: 'day_entries' },
         () => {
           void this.sync();
         }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'categories' },
+        { event: '*', schema: 'belast', table: 'categories' },
         () => {
           void this.sync();
         }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'week_plans' },
+        { event: '*', schema: 'belast', table: 'week_plans' },
         () => {
           void this.sync();
         }
