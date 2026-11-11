@@ -30,20 +30,55 @@ create table if not exists belast.day_entries_history (like public.day_entries_h
 create table if not exists belast.categories_history  (like public.categories_history  including all);
 create table if not exists belast.week_plans_history  (like public.week_plans_history  including all);
 
-insert into belast.day_entries        select * from public.day_entries        where not exists (select 1 from belast.day_entries);
-insert into belast.categories         select * from public.categories         where not exists (select 1 from belast.categories);
-insert into belast.week_plans         select * from public.week_plans         where not exists (select 1 from belast.week_plans);
-insert into belast.day_entries_history select * from public.day_entries_history where not exists (select 1 from belast.day_entries_history);
-insert into belast.categories_history  select * from public.categories_history  where not exists (select 1 from belast.categories_history);
-insert into belast.week_plans_history  select * from public.week_plans_history  where not exists (select 1 from belast.week_plans_history);
+-- NB: historikktabellene har hist_id GENERATED ALWAYS AS IDENTITY, så vi kan ikke
+-- gjøre "select *" – kolonnene listes eksplisitt uten hist_id (ny sekvens genereres).
+insert into belast.day_entries (id, user_id, date, activities, load, duration_min,
+  sleep_score, nutrition_score, note, pains, updated_at, deleted, valid_from)
+  select id, user_id, date, activities, load, duration_min,
+    sleep_score, nutrition_score, note, pains, updated_at, deleted, valid_from
+  from public.day_entries
+  where not exists (select 1 from belast.day_entries);
+insert into belast.categories (id, user_id, kind, key, label, sort_order, active, updated_at, valid_from)
+  select id, user_id, kind, key, label, sort_order, active, updated_at, valid_from
+  from public.categories
+  where not exists (select 1 from belast.categories);
+insert into belast.week_plans (id, user_id, name, favorite, days, updated_at, deleted, valid_from)
+  select id, user_id, name, favorite, days, updated_at, deleted, valid_from
+  from public.week_plans
+  where not exists (select 1 from belast.week_plans);
+insert into belast.day_entries_history (id, user_id, date, activities, load, duration_min,
+  sleep_score, nutrition_score, note, pains, updated_at, deleted, valid_from, valid_to)
+  select id, user_id, date, activities, load, duration_min,
+    sleep_score, nutrition_score, note, pains, updated_at, deleted, valid_from, valid_to
+  from public.day_entries_history
+  where not exists (select 1 from belast.day_entries_history);
+insert into belast.categories_history (id, user_id, kind, key, label, sort_order, active,
+  updated_at, valid_from, valid_to)
+  select id, user_id, kind, key, label, sort_order, active, updated_at, valid_from, valid_to
+  from public.categories_history
+  where not exists (select 1 from belast.categories_history);
+insert into belast.week_plans_history (id, user_id, name, favorite, days, updated_at, deleted,
+  valid_from, valid_to)
+  select id, user_id, name, favorite, days, updated_at, deleted, valid_from, valid_to
+  from public.week_plans_history
+  where not exists (select 1 from belast.week_plans_history);
 
--- 3. Foreign keys mot auth.users (LIKE kopierer ikke FK-er)
-alter table belast.day_entries add constraint day_entries_user_id_fkey
-  foreign key (user_id) references auth.users(id) on delete cascade;
-alter table belast.categories  add constraint categories_user_id_fkey
-  foreign key (user_id) references auth.users(id) on delete cascade;
-alter table belast.week_plans  add constraint week_plans_user_id_fkey
-  foreign key (user_id) references auth.users(id) on delete cascade;
+-- 3. Foreign keys mot auth.users (LIKE kopierer ikke FK-er) – idempotent
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'day_entries_user_id_fkey') then
+    alter table belast.day_entries add constraint day_entries_user_id_fkey
+      foreign key (user_id) references auth.users(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'categories_user_id_fkey') then
+    alter table belast.categories add constraint categories_user_id_fkey
+      foreign key (user_id) references auth.users(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'week_plans_user_id_fkey') then
+    alter table belast.week_plans add constraint week_plans_user_id_fkey
+      foreign key (user_id) references auth.users(id) on delete cascade;
+  end if;
+end $$;
 
 -- 4. RLS + policyer (samme mønster som i public)
 alter table belast.day_entries        enable row level security;
@@ -53,43 +88,61 @@ alter table belast.day_entries_history enable row level security;
 alter table belast.categories_history  enable row level security;
 alter table belast.week_plans_history  enable row level security;
 
+drop policy if exists "Brukere ser egne rader" on belast.day_entries;
 create policy "Brukere ser egne rader"
   on belast.day_entries for select using (auth.uid() = user_id);
+drop policy if exists "Brukere skriver egne rader" on belast.day_entries;
 create policy "Brukere skriver egne rader"
   on belast.day_entries for insert with check (auth.uid() = user_id);
+drop policy if exists "Brukere oppdaterer egne rader" on belast.day_entries;
 create policy "Brukere oppdaterer egne rader"
   on belast.day_entries for update using (auth.uid() = user_id);
+drop policy if exists "Brukere sletter egne rader" on belast.day_entries;
 create policy "Brukere sletter egne rader"
   on belast.day_entries for delete using (auth.uid() = user_id);
 
+drop policy if exists "Brukere ser egne kategorier" on belast.categories;
 create policy "Brukere ser egne kategorier"
   on belast.categories for select using (auth.uid() = user_id);
+drop policy if exists "Brukere skriver egne kategorier" on belast.categories;
 create policy "Brukere skriver egne kategorier"
   on belast.categories for insert with check (auth.uid() = user_id);
+drop policy if exists "Brukere oppdaterer egne kategorier" on belast.categories;
 create policy "Brukere oppdaterer egne kategorier"
   on belast.categories for update using (auth.uid() = user_id);
+drop policy if exists "Brukere sletter egne kategorier" on belast.categories;
 create policy "Brukere sletter egne kategorier"
   on belast.categories for delete using (auth.uid() = user_id);
 
+drop policy if exists "Brukere ser egne planer" on belast.week_plans;
 create policy "Brukere ser egne planer"
   on belast.week_plans for select using (auth.uid() = user_id);
+drop policy if exists "Brukere skriver egne planer" on belast.week_plans;
 create policy "Brukere skriver egne planer"
   on belast.week_plans for insert with check (auth.uid() = user_id);
+drop policy if exists "Brukere oppdaterer egne planer" on belast.week_plans;
 create policy "Brukere oppdaterer egne planer"
   on belast.week_plans for update using (auth.uid() = user_id);
+drop policy if exists "Brukere sletter egne planer" on belast.week_plans;
 create policy "Brukere sletter egne planer"
   on belast.week_plans for delete using (auth.uid() = user_id);
 
+drop policy if exists "Brukere ser egen historikk (dager)" on belast.day_entries_history;
 create policy "Brukere ser egen historikk (dager)"
   on belast.day_entries_history for select using (auth.uid() = user_id);
+drop policy if exists "Brukere ser egen historikk (kategorier)" on belast.categories_history;
 create policy "Brukere ser egen historikk (kategorier)"
   on belast.categories_history for select using (auth.uid() = user_id);
+drop policy if exists "Brukere ser egen historikk (planer)" on belast.week_plans_history;
 create policy "Brukere ser egen historikk (planer)"
   on belast.week_plans_history for select using (auth.uid() = user_id);
+drop policy if exists "System skriver historikk (dager)" on belast.day_entries_history;
 create policy "System skriver historikk (dager)"
   on belast.day_entries_history for insert with check (true);
+drop policy if exists "System skriver historikk (kategorier)" on belast.categories_history;
 create policy "System skriver historikk (kategorier)"
   on belast.categories_history for insert with check (true);
+drop policy if exists "System skriver historikk (planer)" on belast.week_plans_history;
 create policy "System skriver historikk (planer)"
   on belast.week_plans_history for insert with check (true);
 
