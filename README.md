@@ -73,14 +73,15 @@ Navnet vises i toppmenyen og på hjem-siden.
 ## Supabase-oppsett (gjøres én gang)
 
 1. Opprett prosjekt på [supabase.com](https://supabase.com)
-2. Kjør SQL-skriptet `supabase/schema.sql` i **SQL Editor** (lager tabell, RLS-policyer,
-   realtime og slette-funksjon)
-3. Gå til **Authentication → Providers → Email** og **fjern haken for "Confirm email"**
-4. Gå til **Authentication → Users → Add user**:
+2. Kjør SQL-skriptet `supabase/schema.sql` i **SQL Editor** (lager skjemaet `belast`
+   med tabeller, RLS-policyer, realtime og slette-funksjon)
+3. Gå til **Project Settings → API → "Exposed schemas"** og legg til `belast`
+4. Gå til **Authentication → Providers → Email** og **fjern haken for "Confirm email"**
+5. Gå til **Authentication → Users → Add user**:
    - Email: `cbl@belast.app`
    - Password: `Fotball33`
    - Kryss av for **"Auto Confirm User"**
-5. Sett følgende i `src/lib/supabase.ts` (eller som miljøvariabler
+6. Sett følgende i `src/lib/supabase.ts` (eller som miljøvariabler
    `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`):
    - Project URL
    - anon public key
@@ -126,6 +127,33 @@ legge til historikktabeller og triggere. Dette gjøres én gang:
 
 > Nye installasjoner trenger ikke dette – `supabase/schema.sql` lager historikk
 > automatisk.
+
+### Migrasjon 4: flytt alle tabeller til skjemaet `belast` (sandbox-database)
+
+For å samle flere apper i samme Supabase-prosjekt (navngitt `sandbox`) ligger alle
+belast-objekter i sitt eget Postgres-skjema `belast` i stedet for `public`.
+`public` beholdes som backup og slettes ikke. Appen peker på skjemaet via
+`db.schema = 'belast'` i `src/lib/supabase.ts`. Slik gjøres det manuelt:
+
+1. **Gi prosjektet nytt navn** (valgfritt, men anbefalt):
+   Supabase Dashboard → **Project Settings → General → Project name** → `sandbox`.
+   Merk: selve Postgres-databasen heter alltid `postgres` i Supabase og kan ikke
+   omdøpes – det er prosjektnavnet som endres her.
+2. Gå til **SQL Editor** og kjør `supabase/migrations/004_move_to_belast_schema.sql`.
+   Dette kopierer alle tabeller (aktive + historikk), RLS-policyer, triggere,
+   funksjoner og realtime-publikasjon til skjemaet `belast`. `public` røres ikke.
+3. Gå til **Project Settings → API → "Exposed schemas"** og legg til `belast`
+   (ellers ser ikke PostgREST/REST klienten skjemaet).
+4. Gå til **Database → Realtime** og verifiser at `belast.day_entries`,
+   `belast.categories` og `belast.week_plans` er aktivert (skriptet legger dem
+   i publikasjonen automatisk).
+5. Deploy den oppdaterte appen (push til `main` → GitHub Pages), eller kjør
+   `npm run dev` lokalt. Appen leser/skriver nå kun i `belast`-skjemaet.
+6. Verifiser: logg inn i appen, registrer en dag, og sjekk i **Table Editor**
+   (velg skjema `belast`) at raden ligger i `belast.day_entries` og at en
+   historikkrad skrives i `belast.day_entries_history` ved endring.
+7. Når du er sikker på at alt fungerer, kan `public`-tabellene slettes som
+   opprydding – men behold dem til da, de er backupen.
 
 ## Hvordan historikk fungerer (SCD2)
 

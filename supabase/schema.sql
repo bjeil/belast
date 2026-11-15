@@ -1,12 +1,27 @@
 -- ============================================================================
 -- Belast – Supabase database schema
 -- Kjør dette i Supabase Dashboard → SQL Editor (én gang)
+--
+-- Alle objekter ligger i skjemaet `belast` (ikke public), slik at flere apper
+-- kan dele samme Supabase-prosjekt. Appen peker på skjemaet via db.schema
+-- (src/lib/supabase.ts). Etter kjøring, manuelt: Project Settings → API →
+-- "Exposed schemas" → legg til `belast`.
 -- ============================================================================
+
+-- 0. Skjema + tilganger for PostgREST (anon/authenticated)
+create schema if not exists belast;
+grant usage on schema belast to anon, authenticated, service_role;
+grant select, insert, update, delete on all tables in schema belast to anon, authenticated;
+grant execute on all functions in schema belast to anon, authenticated;
+alter default privileges in schema belast
+  grant select, insert, update, delete on tables to anon, authenticated;
+alter default privileges in schema belast
+  grant execute on functions to anon, authenticated;
 
 -- 1. Hovedtabell: én rad per dag per bruker.
 --    Appen forholder seg kun til denne "aktive" tabellen.
 --    valid_from + day_entries_history gir SCD2-historikk (se nedenfor).
-create table if not exists public.day_entries (
+create table if not exists belast.day_entries (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references auth.users(id) on delete cascade,
   date          date not null,
@@ -24,12 +39,12 @@ create table if not exists public.day_entries (
 );
 
 -- Indeks for raske oppslag
-create index if not exists day_entries_user_date_idx on public.day_entries (user_id, date);
+create index if not exists day_entries_user_date_idx on belast.day_entries (user_id, date);
 
 -- 2. Dimensjonstabell: brukerstyrte kategorier (type trening / smertested).
 --    Aktivitetstyper og kroppsdeler i day_entries refererer til `key` her.
 --    Inaktive rader (active = false) beholdes slik at historikk ikke mister etiketter.
-create table if not exists public.categories (
+create table if not exists belast.categories (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users(id) on delete cascade,
   kind        text not null check (kind in ('activity', 'body_part')),
@@ -42,7 +57,7 @@ create table if not exists public.categories (
   unique (user_id, kind, key)
 );
 
-create index if not exists categories_user_kind_idx on public.categories (user_id, kind);
+create index if not exists categories_user_kind_idx on belast.categories (user_id, kind);
 
 -- Seed standardkategorier for eksisterende brukere (én gang).
 -- Kjører bare for brukere som ikke allerede har kategorier.
@@ -71,14 +86,14 @@ declare
   row_data text[];
 begin
   for u in select id from auth.users loop
-    if not exists (select 1 from public.categories where user_id = u.id) then
+    if not exists (select 1 from belast.categories where user_id = u.id) then
       foreach row_data slice 1 in array defaults_activity loop
-        insert into public.categories (user_id, kind, key, label, sort_order, active, valid_from)
+        insert into belast.categories (user_id, kind, key, label, sort_order, active, valid_from)
         values (u.id, 'activity', row_data[1], row_data[2], row_data[3]::int, true, now())
         on conflict (user_id, kind, key) do nothing;
       end loop;
       foreach row_data slice 1 in array defaults_body_part loop
-        insert into public.categories (user_id, kind, key, label, sort_order, active, valid_from)
+        insert into belast.categories (user_id, kind, key, label, sort_order, active, valid_from)
         values (u.id, 'body_part', row_data[1], row_data[2], row_data[3]::int, true, now())
         on conflict (user_id, kind, key) do nothing;
       end loop;
@@ -89,7 +104,7 @@ end $$;
 -- 2b. Ukeplaner: én rad per plan per bruker (planlagt trening mandag–søndag).
 --     Slettede planer beholdes som tombstones (deleted = true) slik at
 --     sletting synkroniseres til andre enheter.
-create table if not exists public.week_plans (
+create table if not exists belast.week_plans (
   id          uuid primary key,
   user_id     uuid not null references auth.users(id) on delete cascade,
   name        text not null default '',
@@ -100,75 +115,75 @@ create table if not exists public.week_plans (
   valid_from  timestamptz not null default now()
 );
 
-create index if not exists week_plans_user_idx on public.week_plans (user_id);
+create index if not exists week_plans_user_idx on belast.week_plans (user_id);
 
 -- 3. Row Level Security: brukere kan KUN se og endre egne rader
-alter table public.day_entries enable row level security;
+alter table belast.day_entries enable row level security;
 
-drop policy if exists "Brukere ser egne rader" on public.day_entries;
+drop policy if exists "Brukere ser egne rader" on belast.day_entries;
 create policy "Brukere ser egne rader"
-  on public.day_entries for select
+  on belast.day_entries for select
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere skriver egne rader" on public.day_entries;
+drop policy if exists "Brukere skriver egne rader" on belast.day_entries;
 create policy "Brukere skriver egne rader"
-  on public.day_entries for insert
+  on belast.day_entries for insert
   with check (auth.uid() = user_id);
 
-drop policy if exists "Brukere oppdaterer egne rader" on public.day_entries;
+drop policy if exists "Brukere oppdaterer egne rader" on belast.day_entries;
 create policy "Brukere oppdaterer egne rader"
-  on public.day_entries for update
+  on belast.day_entries for update
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere sletter egne rader" on public.day_entries;
+drop policy if exists "Brukere sletter egne rader" on belast.day_entries;
 create policy "Brukere sletter egne rader"
-  on public.day_entries for delete
+  on belast.day_entries for delete
   using (auth.uid() = user_id);
 
 -- RLS for kategorier (samme mønster)
-alter table public.categories enable row level security;
+alter table belast.categories enable row level security;
 
 -- RLS for ukeplaner (samme mønster)
-alter table public.week_plans enable row level security;
+alter table belast.week_plans enable row level security;
 
-drop policy if exists "Brukere ser egne planer" on public.week_plans;
+drop policy if exists "Brukere ser egne planer" on belast.week_plans;
 create policy "Brukere ser egne planer"
-  on public.week_plans for select
+  on belast.week_plans for select
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere skriver egne planer" on public.week_plans;
+drop policy if exists "Brukere skriver egne planer" on belast.week_plans;
 create policy "Brukere skriver egne planer"
-  on public.week_plans for insert
+  on belast.week_plans for insert
   with check (auth.uid() = user_id);
 
-drop policy if exists "Brukere oppdaterer egne planer" on public.week_plans;
+drop policy if exists "Brukere oppdaterer egne planer" on belast.week_plans;
 create policy "Brukere oppdaterer egne planer"
-  on public.week_plans for update
+  on belast.week_plans for update
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere sletter egne planer" on public.week_plans;
+drop policy if exists "Brukere sletter egne planer" on belast.week_plans;
 create policy "Brukere sletter egne planer"
-  on public.week_plans for delete
+  on belast.week_plans for delete
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere ser egne kategorier" on public.categories;
+drop policy if exists "Brukere ser egne kategorier" on belast.categories;
 create policy "Brukere ser egne kategorier"
-  on public.categories for select
+  on belast.categories for select
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere skriver egne kategorier" on public.categories;
+drop policy if exists "Brukere skriver egne kategorier" on belast.categories;
 create policy "Brukere skriver egne kategorier"
-  on public.categories for insert
+  on belast.categories for insert
   with check (auth.uid() = user_id);
 
-drop policy if exists "Brukere oppdaterer egne kategorier" on public.categories;
+drop policy if exists "Brukere oppdaterer egne kategorier" on belast.categories;
 create policy "Brukere oppdaterer egne kategorier"
-  on public.categories for update
+  on belast.categories for update
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere sletter egne kategorier" on public.categories;
+drop policy if exists "Brukere sletter egne kategorier" on belast.categories;
 create policy "Brukere sletter egne kategorier"
-  on public.categories for delete
+  on belast.categories for delete
   using (auth.uid() = user_id);
 
 -- 4. Realtime: appen får beskjed når data endres på en annen enhet.
@@ -178,21 +193,21 @@ do $$
 begin
   if not exists (
     select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'day_entries'
+    where pubname = 'supabase_realtime' and schemaname = 'belast' and tablename = 'day_entries'
   ) then
-    alter publication supabase_realtime add table public.day_entries;
+    alter publication supabase_realtime add table belast.day_entries;
   end if;
   if not exists (
     select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'categories'
+    where pubname = 'supabase_realtime' and schemaname = 'belast' and tablename = 'categories'
   ) then
-    alter publication supabase_realtime add table public.categories;
+    alter publication supabase_realtime add table belast.categories;
   end if;
   if not exists (
     select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'week_plans'
+    where pubname = 'supabase_realtime' and schemaname = 'belast' and tablename = 'week_plans'
   ) then
-    alter publication supabase_realtime add table public.week_plans;
+    alter publication supabase_realtime add table belast.week_plans;
   end if;
 end $$;
 
@@ -200,7 +215,7 @@ end $$;
 --    Appen skriver aldri til historikken — triggerne under gjør det automatisk
 --    på INSERT/UPDATE/DELETE. Hver historikkrad er én versjon med
 --    gyldighetsintervall [valid_from, valid_to).
-create table if not exists public.day_entries_history (
+create table if not exists belast.day_entries_history (
   hist_id     bigint generated always as identity primary key,
   id          uuid not null,
   user_id     uuid not null,
@@ -218,7 +233,7 @@ create table if not exists public.day_entries_history (
   valid_to    timestamptz not null
 );
 
-create table if not exists public.categories_history (
+create table if not exists belast.categories_history (
   hist_id     bigint generated always as identity primary key,
   id          uuid not null,
   user_id     uuid not null,
@@ -232,7 +247,7 @@ create table if not exists public.categories_history (
   valid_to    timestamptz not null
 );
 
-create table if not exists public.week_plans_history (
+create table if not exists belast.week_plans_history (
   hist_id     bigint generated always as identity primary key,
   id          uuid not null,
   user_id     uuid not null,
@@ -246,14 +261,14 @@ create table if not exists public.week_plans_history (
 );
 
 create index if not exists day_entries_history_user_date_idx
-  on public.day_entries_history (user_id, date, valid_from);
+  on belast.day_entries_history (user_id, date, valid_from);
 create index if not exists categories_history_user_idx
-  on public.categories_history (user_id, kind, key, valid_from);
+  on belast.categories_history (user_id, kind, key, valid_from);
 create index if not exists week_plans_history_user_idx
-  on public.week_plans_history (user_id, id, valid_from);
+  on belast.week_plans_history (user_id, id, valid_from);
 
 -- valid_from settes automatisk ved INSERT/UPDATE (default: updated_at)
-create or replace function public.set_valid_from()
+create or replace function belast.set_valid_from()
 returns trigger
 language plpgsql
 as $$
@@ -264,24 +279,24 @@ begin
   return new;
 end $$;
 
-drop trigger if exists day_entries_valid_from on public.day_entries;
+drop trigger if exists day_entries_valid_from on belast.day_entries;
 create trigger day_entries_valid_from
-  before insert or update on public.day_entries
-  for each row execute function public.set_valid_from();
+  before insert or update on belast.day_entries
+  for each row execute function belast.set_valid_from();
 
-drop trigger if exists categories_valid_from on public.categories;
+drop trigger if exists categories_valid_from on belast.categories;
 create trigger categories_valid_from
-  before insert or update on public.categories
-  for each row execute function public.set_valid_from();
+  before insert or update on belast.categories
+  for each row execute function belast.set_valid_from();
 
-drop trigger if exists week_plans_valid_from on public.week_plans;
+drop trigger if exists week_plans_valid_from on belast.week_plans;
 create trigger week_plans_valid_from
-  before insert or update on public.week_plans
-  for each row execute function public.set_valid_from();
+  before insert or update on belast.week_plans
+  for each row execute function belast.set_valid_from();
 
 -- Arkiver forrige versjon av raden i historikk ved UPDATE/DELETE.
 -- (INSERT gir ingen historikkrad — første versjon arkiveres ved første endring.)
-create or replace function public.archive_row_version()
+create or replace function belast.archive_row_version()
 returns trigger
 language plpgsql
 security definer
@@ -291,7 +306,7 @@ declare
 begin
   if tg_table_name = 'day_entries' then
     if tg_op = 'INSERT' then return new; end if;
-    insert into public.day_entries_history
+    insert into belast.day_entries_history
       (id, user_id, date, activities, load, duration_min, sleep_score,
        nutrition_score, note, pains, updated_at, deleted, valid_from, valid_to)
     values
@@ -300,14 +315,14 @@ begin
        old.deleted, old.valid_from, v_valid_to);
   elsif tg_table_name = 'categories' then
     if tg_op = 'INSERT' then return new; end if;
-    insert into public.categories_history
+    insert into belast.categories_history
       (id, user_id, kind, key, label, sort_order, active, updated_at, valid_from, valid_to)
     values
       (old.id, old.user_id, old.kind, old.key, old.label, old.sort_order,
        old.active, old.updated_at, old.valid_from, v_valid_to);
   elsif tg_table_name = 'week_plans' then
     if tg_op = 'INSERT' then return new; end if;
-    insert into public.week_plans_history
+    insert into belast.week_plans_history
       (id, user_id, name, favorite, days, updated_at, deleted, valid_from, valid_to)
     values
       (old.id, old.user_id, old.name, old.favorite, old.days, old.updated_at,
@@ -318,70 +333,70 @@ begin
   return new;
 end $$;
 
-drop trigger if exists day_entries_archive on public.day_entries;
+drop trigger if exists day_entries_archive on belast.day_entries;
 create trigger day_entries_archive
-  after insert or update or delete on public.day_entries
-  for each row execute function public.archive_row_version();
+  after insert or update or delete on belast.day_entries
+  for each row execute function belast.archive_row_version();
 
-drop trigger if exists categories_archive on public.categories;
+drop trigger if exists categories_archive on belast.categories;
 create trigger categories_archive
-  after insert or update or delete on public.categories
-  for each row execute function public.archive_row_version();
+  after insert or update or delete on belast.categories
+  for each row execute function belast.archive_row_version();
 
-drop trigger if exists week_plans_archive on public.week_plans;
+drop trigger if exists week_plans_archive on belast.week_plans;
 create trigger week_plans_archive
-  after insert or update or delete on public.week_plans
-  for each row execute function public.archive_row_version();
+  after insert or update or delete on belast.week_plans
+  for each row execute function belast.archive_row_version();
 
 -- RLS for historikktabeller: brukere ser kun egen historikk.
 -- Appen skriver aldri til historikken — kun trigger-funksjonen gjør det
 -- (security definer), så INSERT-policy med check (true) er trygt.
-alter table public.day_entries_history enable row level security;
-alter table public.categories_history  enable row level security;
-alter table public.week_plans_history  enable row level security;
+alter table belast.day_entries_history enable row level security;
+alter table belast.categories_history  enable row level security;
+alter table belast.week_plans_history  enable row level security;
 
-drop policy if exists "Brukere ser egen historikk (dager)" on public.day_entries_history;
+drop policy if exists "Brukere ser egen historikk (dager)" on belast.day_entries_history;
 create policy "Brukere ser egen historikk (dager)"
-  on public.day_entries_history for select
+  on belast.day_entries_history for select
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere ser egen historikk (kategorier)" on public.categories_history;
+drop policy if exists "Brukere ser egen historikk (kategorier)" on belast.categories_history;
 create policy "Brukere ser egen historikk (kategorier)"
-  on public.categories_history for select
+  on belast.categories_history for select
   using (auth.uid() = user_id);
 
-drop policy if exists "Brukere ser egen historikk (planer)" on public.week_plans_history;
+drop policy if exists "Brukere ser egen historikk (planer)" on belast.week_plans_history;
 create policy "Brukere ser egen historikk (planer)"
-  on public.week_plans_history for select
+  on belast.week_plans_history for select
   using (auth.uid() = user_id);
 
-drop policy if exists "System skriver historikk (dager)" on public.day_entries_history;
+drop policy if exists "System skriver historikk (dager)" on belast.day_entries_history;
 create policy "System skriver historikk (dager)"
-  on public.day_entries_history for insert
+  on belast.day_entries_history for insert
   with check (true);
 
-drop policy if exists "System skriver historikk (kategorier)" on public.categories_history;
+drop policy if exists "System skriver historikk (kategorier)" on belast.categories_history;
 create policy "System skriver historikk (kategorier)"
-  on public.categories_history for insert
+  on belast.categories_history for insert
   with check (true);
 
-drop policy if exists "System skriver historikk (planer)" on public.week_plans_history;
+drop policy if exists "System skriver historikk (planer)" on belast.week_plans_history;
 create policy "System skriver historikk (planer)"
-  on public.week_plans_history for insert
+  on belast.week_plans_history for insert
   with check (true);
 
 -- 6. Hjelpefunksjon: slett ALLE data (aktiv + historikk) for innlogget bruker (GDPR art. 17)
-create or replace function public.delete_all_my_data()
+create or replace function belast.delete_all_my_data()
 returns void
 language sql
 security definer
 as $$
-  delete from public.day_entries        where user_id = auth.uid();
-  delete from public.day_entries_history where user_id = auth.uid();
-  delete from public.categories          where user_id = auth.uid();
-  delete from public.categories_history  where user_id = auth.uid();
-  delete from public.week_plans        where user_id = auth.uid();
-  delete from public.week_plans_history  where user_id = auth.uid();
+  delete from belast.day_entries        where user_id = auth.uid();
+  delete from belast.day_entries_history where user_id = auth.uid();
+  delete from belast.categories          where user_id = auth.uid();
+  delete from belast.categories_history  where user_id = auth.uid();
+  delete from belast.week_plans        where user_id = auth.uid();
+  delete from belast.week_plans_history  where user_id = auth.uid();
 $$;
 
 -- ============================================================================
